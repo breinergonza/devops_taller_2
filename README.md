@@ -82,5 +82,3 @@ Sigue `../PASO-A-PASO-Entrega-2.md`. Pasos clave:
 6. Artifacts: bucket S3 propio (`blacklist-artifacts-...`).
 7. Logs: CloudWatch group `/aws/codebuild/blacklist-ci`.
 
-----
-test
