@@ -1,9 +1,15 @@
 version: 0.2
 
+batch:
+  fast-fail: true
+  build-list:
+    - identifier: ci
+      ignore-failure: false
+
 env:
   variables:
-    ARTIFACT_NAME: "blacklist-service"
-    S3_BUCKET: "taller-2-artifacts"
+    ARTIFACT_NAME: blacklist-service
+    S3_BUCKET: taller-2-artifacts
   parameter-store:
     DATABASE_URI: /taller2/database-uri
     JWT_SECRET_KEY: /taller2/jwt-secret-key
@@ -14,20 +20,20 @@ phases:
     runtime-versions:
       python: 3.11
     commands:
-      - echo "=== INSTALL PHASE ==="
+      - echo "Installing dependencies..."
       - python --version
-      - pip install --upgrade pip
+      - python -m pip install --upgrade pip setuptools wheel
       - pip install -r requirements.txt
 
   pre_build:
     commands:
-      - echo "=== PRE_BUILD PHASE: Running Tests ==="
+      - echo "Running tests..."
       - mkdir -p reports
       - pytest -v --junitxml=reports/junit.xml --cov=src --cov-report=xml:reports/coverage.xml --cov-report=html:reports/htmlcov --cov-report=term-missing
 
   build:
     commands:
-      - echo "=== BUILD PHASE: Creating Artifact ==="
+      - echo "Creating artifact..."
       - export BUILD_ID=${CODEBUILD_BUILD_NUMBER:-local}
       - export ARTIFACT_FILE="build/${ARTIFACT_NAME}-${BUILD_ID}.zip"
       - mkdir -p build
@@ -36,11 +42,11 @@ phases:
 
   post_build:
     commands:
-      - echo "=== POST_BUILD PHASE: Uploading to S3 ==="
+      - echo "Uploading to S3..."
       - export BUILD_ID=${CODEBUILD_BUILD_NUMBER:-local}
       - export ARTIFACT_FILE="build/${ARTIFACT_NAME}-${BUILD_ID}.zip"
       - aws s3 cp ${ARTIFACT_FILE} s3://${S3_BUCKET}/builds/${CODEBUILD_BUILD_ID}/ --region us-east-1
-      - echo "Artifact uploaded to S3 successfully"
+      - echo "Upload complete"
 
 reports:
   junit_report:
