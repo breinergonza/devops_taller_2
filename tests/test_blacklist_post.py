@@ -5,7 +5,7 @@ def test_post_blacklist_ok(client, auth_header):
     resp = client.post(
         "/blacklists",
         data={
-            "email": "lol@uniandes.edu.co",
+            "email": "b.gonzalez@uniandes.edu.co",
             "app_uuid": "11111111-1111-1111-1111-111111111111",
             "blocked_reason": "spam masivo",
         },
@@ -13,7 +13,7 @@ def test_post_blacklist_ok(client, auth_header):
     )
     assert resp.status_code == 201
     body = resp.get_json()
-    assert body["email"] == "test@uniandes.edu.co"
+    assert body["email"] == "b.gonzalez@uniandes.edu.co"
     assert "id" in body and isinstance(body["id"], int)
     assert "created_at" in body
 
