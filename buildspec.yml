@@ -6,31 +6,58 @@ batch:
     - identifier: ci
       ignore-failure: false
 
+env:
+  variables:
+    ARTIFACT_NAME: "blacklist-service"
+    S3_BUCKET: "taller-2-artifacts"
+  parameter-store:
+    DATABASE_URI: /taller2/database-uri
+    JWT_SECRET_KEY: /taller2/jwt-secret-key
+    STATIC_BEARER: /taller2/static-bearer
+
 phases:
   install:
     runtime-versions:
       python: 3.11
     commands:
-      - echo "===> install phase started on `date`"
-      - python -m pip install --upgrade pip
+      - echo "====== INSTALL PHASE ======"
+      - echo "Python version:" && python --version
+      - python -m pip install --upgrade pip setuptools wheel
       - pip install -r requirements.txt
+      - echo "All dependencies installed successfully"
 
   pre_build:
     commands:
-      - 'echo "===> pre_build phase: ejecutando pruebas unitarias"'
+      - echo "====== PRE_BUILD PHASE: Running Unit Tests ======"
       - mkdir -p reports
-      - pytest -v --junitxml=reports/junit.xml --cov=src --cov-report=xml:reports/coverage.xml --cov-report=term-missing
+      - echo "Running pytest with coverage..."
+      - pytest -v --junitxml=reports/junit.xml --cov=src --cov-report=xml:reports/coverage.xml --cov-report=html:reports/htmlcov --cov-report=term-missing
+      - echo "Test execution completed"
+      - echo "Coverage report generated in reports/htmlcov/"
 
   build:
     commands:
-      - 'echo "===> build phase: empaquetando artefacto"'
+      - echo "====== BUILD PHASE: Packaging Artifact ======"
+      - BUILD_DATE=$(date +%Y-%m-%d_%H-%M-%S)
       - mkdir -p build
-      - zip -r build/blacklist-service.zip . -x "venv/*" "tests/*" "*.git*" "build/*" "reports/*" "__pycache__/*" ".pytest_cache/*"
+      - echo "Creating deployment package..."
+      - zip -r build/${ARTIFACT_NAME}-${BUILD_DATE}.zip .
+        -x "venv/*" "tests/*" ".git/*" ".github/*" "node_modules/*"
+        ".pytest_cache/*" "__pycache__/*" "*.pyc" ".coverage*"
+        "build/*" "reports/*" ".DS_Store" ".env" ".env.local"
       - ls -lh build/
+      - echo "Artifact created successfully"
 
   post_build:
     commands:
-      - echo "===> post_build phase finished on `date`"
+      - echo "====== POST_BUILD PHASE: Uploading to S3 and Preparing Deployment ======"
+      - BUILD_DATE=$(date +%Y-%m-%d_%H-%M-%S)
+      - ARTIFACT_FILE="build/${ARTIFACT_NAME}-${BUILD_DATE}.zip"
+      - echo "Uploading artifact to S3..."
+      - aws s3 cp ${ARTIFACT_FILE} s3://${S3_BUCKET}/builds/${CODEBUILD_BUILD_ID}/ --region us-east-1
+      - echo "Artifact uploaded successfully to S3"
+      - echo "Artifact path: s3://${S3_BUCKET}/builds/${CODEBUILD_BUILD_ID}/${ARTIFACT_NAME}-${BUILD_DATE}.zip"
+      - echo "Ready for Elastic Beanstalk deployment"
 
 reports:
   pytest_reports:
@@ -44,6 +71,10 @@ reports:
 
 artifacts:
   files:
-    - build/blacklist-service.zip
+    - build/*.zip
+  name: BlacklistServiceArtifact
   discard-paths: yes
-  name: blacklist-service-$(date +%Y-%m-%d-%H-%M-%S)
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'
