@@ -81,3 +81,6 @@ Sigue `../PASO-A-PASO-Entrega-2.md`. Pasos clave:
 5. Buildspec: usar `buildspec.yml` del repo (no cargar inline).
 6. Artifacts: bucket S3 propio (`blacklist-artifacts-...`).
 7. Logs: CloudWatch group `/aws/codebuild/blacklist-ci`.
+
+----
+test
