@@ -1,11 +1,5 @@
 version: 0.2
 
-batch:
-  fast-fail: true
-  build-list:
-    - identifier: ci
-      ignore-failure: false
-
 env:
   variables:
     ARTIFACT_NAME: "blacklist-service"
@@ -20,44 +14,36 @@ phases:
     runtime-versions:
       python: 3.11
     commands:
-      - echo "====== INSTALL PHASE ======"
-      - echo "Python version:" && python --version
-      - python -m pip install --upgrade pip setuptools wheel
+      - echo "=== INSTALL PHASE ==="
+      - python --version
+      - pip install --upgrade pip
       - pip install -r requirements.txt
-      - echo "All dependencies installed successfully"
 
   pre_build:
     commands:
-      - echo "====== PRE_BUILD PHASE: Running Unit Tests ======"
+      - echo "=== PRE_BUILD PHASE: Running Tests ==="
       - mkdir -p reports
-      - echo "Running pytest with coverage..."
       - pytest -v --junitxml=reports/junit.xml --cov=src --cov-report=xml:reports/coverage.xml --cov-report=html:reports/htmlcov --cov-report=term-missing
-      - echo "Test execution completed"
-      - echo "Coverage report generated in reports/htmlcov/"
 
   build:
     commands:
-      - echo "====== BUILD PHASE: Packaging Artifact ======"
-      - BUILD_DATE=$(date +%Y-%m-%d_%H-%M-%S)
+      - echo "=== BUILD PHASE: Creating Artifact ==="
+      - export BUILD_ID=${CODEBUILD_BUILD_NUMBER:-local}
+      - export ARTIFACT_FILE="build/${ARTIFACT_NAME}-${BUILD_ID}.zip"
       - mkdir -p build
-      - echo "Creating deployment package..."
-      - zip -r build/${ARTIFACT_NAME}-${BUILD_DATE}.zip . -x "venv/*" "tests/*" ".git/*" ".github/*" "node_modules/*" ".pytest_cache/*" "__pycache__/*" "*.pyc" ".coverage*" "build/*" "reports/*" ".DS_Store" ".env" ".env.local"
+      - zip -r ${ARTIFACT_FILE} . -x "venv/*" "tests/*" ".git/*" ".github/*" "node_modules/*" ".pytest_cache/*" "__pycache__/*" "*.pyc" ".coverage*" "build/*" "reports/*" ".DS_Store" ".env" ".env.local"
       - ls -lh build/
-      - echo "Artifact created successfully"
 
   post_build:
     commands:
-      - echo "====== POST_BUILD PHASE: Uploading to S3 and Preparing Deployment ======"
-      - BUILD_DATE=$(date +%Y-%m-%d_%H-%M-%S)
-      - ARTIFACT_FILE="build/${ARTIFACT_NAME}-${BUILD_DATE}.zip"
-      - echo "Uploading artifact to S3..."
+      - echo "=== POST_BUILD PHASE: Uploading to S3 ==="
+      - export BUILD_ID=${CODEBUILD_BUILD_NUMBER:-local}
+      - export ARTIFACT_FILE="build/${ARTIFACT_NAME}-${BUILD_ID}.zip"
       - aws s3 cp ${ARTIFACT_FILE} s3://${S3_BUCKET}/builds/${CODEBUILD_BUILD_ID}/ --region us-east-1
-      - echo "Artifact uploaded successfully to S3"
-      - echo "Artifact path: s3://${S3_BUCKET}/builds/${CODEBUILD_BUILD_ID}/${ARTIFACT_NAME}-${BUILD_DATE}.zip"
-      - echo "Ready for Elastic Beanstalk deployment"
+      - echo "Artifact uploaded to S3 successfully"
 
 reports:
-  pytest_reports:
+  junit_report:
     files:
       - reports/junit.xml
     file-format: JUNITXML
@@ -69,9 +55,9 @@ reports:
 artifacts:
   files:
     - build/*.zip
-  name: BlacklistServiceArtifact
+  name: BlacklistServiceBuild
   discard-paths: yes
 
 cache:
   paths:
-    - '/root/.cache/pip/**/*'
+    - /root/.cache/pip/**/*
