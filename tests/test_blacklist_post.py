@@ -5,7 +5,7 @@ def test_post_blacklist_ok(client, auth_header):
     resp = client.post(
         "/blacklists",
         data={
-            "email": "test@uniandes.edu.co",
+            "email": "lol@uniandes.edu.co",
             "app_uuid": "11111111-1111-1111-1111-111111111111",
             "blocked_reason": "spam masivo",
         },
