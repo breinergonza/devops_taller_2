@@ -43,7 +43,22 @@ class HealthCheckResource(Resource):
     """Endpoint de salud abierto (no requiere token).
 
     Beanstalk puede apuntar el Health Check Path a /ping para evitar
-    problemas con la autenticacion."""
+    problemas con la autenticacion.
+
+    ---
+    tags:
+      - Health
+    responses:
+      200:
+        description: Service is healthy
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+            timestamp:
+              type: string
+    """
 
     def get(self):
         return {
@@ -53,7 +68,40 @@ class HealthCheckResource(Resource):
 
 
 class BlacklistResource(Resource):
-    """POST /blacklists - agrega un email a la lista negra global."""
+    """POST /blacklists - agrega un email a la lista negra global.
+
+    ---
+    tags:
+      - Blacklist
+    parameters:
+      - name: Authorization
+        in: header
+        type: string
+        required: true
+        description: Bearer token for authentication
+      - name: email
+        in: formData
+        type: string
+        required: true
+        description: Email address to blacklist
+      - name: app_uuid
+        in: formData
+        type: string
+        required: true
+        description: UUID of the application making the request
+      - name: blocked_reason
+        in: formData
+        type: string
+        required: false
+        description: Reason for blocking (max 255 characters)
+    responses:
+      201:
+        description: Email successfully added to blacklist
+      400:
+        description: Bad request - validation error
+      401:
+        description: Unauthorized - invalid token
+    """
 
     def post(self):
         if not _is_authorized():
@@ -97,7 +145,28 @@ class BlacklistResource(Resource):
 
 
 class BlacklistByEmailResource(Resource):
-    """GET /blacklists/<email> - consulta si un email esta en la lista negra."""
+    """GET /blacklists/<email> - consulta si un email esta en la lista negra.
+
+    ---
+    tags:
+      - Blacklist
+    parameters:
+      - name: Authorization
+        in: header
+        type: string
+        required: true
+        description: Bearer token for authentication
+      - name: email
+        in: path
+        type: string
+        required: true
+        description: Email address to check
+    responses:
+      200:
+        description: Email status retrieved
+      401:
+        description: Unauthorized - invalid token
+    """
 
     def get(self, email):
         if not _is_authorized():

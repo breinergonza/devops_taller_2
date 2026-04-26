@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:14-alpine
+    container_name: blacklist-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: blacklist
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: blacklist-app
+    environment:
+      ENV_FILE: .env.local
+      FLASK_APP: application.py
+      FLASK_DEBUG: "1"
+    ports:
+      - "5002:5000"
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    command: python application.py
+
+volumes:
+  postgres_data:
