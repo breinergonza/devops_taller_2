@@ -25,13 +25,13 @@ phases:
 
   pre_build:
     commands:
-      - echo "===> pre_build phase: ejecutando pruebas unitarias"
+      - 'echo "===> pre_build phase: ejecutando pruebas unitarias"'
       - mkdir -p reports
       - pytest -v --junitxml=reports/junit.xml --cov=src --cov-report=xml:reports/coverage.xml --cov-report=term-missing
 
   build:
     commands:
-      - echo "===> build phase: empaquetando artefacto"
+      - 'echo "===> build phase: empaquetando artefacto"'
       - mkdir -p build
       - zip -r build/blacklist-service.zip . -x "venv/*" "tests/*" "*.git*" "build/*" "reports/*" "__pycache__/*" ".pytest_cache/*"
       - ls -lh build/
