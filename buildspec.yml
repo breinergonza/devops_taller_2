@@ -41,10 +41,7 @@ phases:
       - BUILD_DATE=$(date +%Y-%m-%d_%H-%M-%S)
       - mkdir -p build
       - echo "Creating deployment package..."
-      - zip -r build/${ARTIFACT_NAME}-${BUILD_DATE}.zip .
-        -x "venv/*" "tests/*" ".git/*" ".github/*" "node_modules/*"
-        ".pytest_cache/*" "__pycache__/*" "*.pyc" ".coverage*"
-        "build/*" "reports/*" ".DS_Store" ".env" ".env.local"
+      - zip -r build/${ARTIFACT_NAME}-${BUILD_DATE}.zip . -x "venv/*" "tests/*" ".git/*" ".github/*" "node_modules/*" ".pytest_cache/*" "__pycache__/*" "*.pyc" ".coverage*" "build/*" "reports/*" ".DS_Store" ".env" ".env.local"
       - ls -lh build/
       - echo "Artifact created successfully"
 
