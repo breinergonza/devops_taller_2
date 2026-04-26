@@ -1,4 +1,9 @@
 # devops_taller_2
+
+## Grupo: The Last One
+
+- Integrante: Breitner Enrique Gonzalez Angarita
+
 Taller 2: Integración Continua (CI)
 
 Continuacion del microservicio de la Entrega 1, esta vez con un pipeline de **Integracion Continua** sobre AWS CodeBuild que se dispara con cada commit en `master`/`main`, ejecuta las pruebas unitarias y genera el artefacto desplegable.
