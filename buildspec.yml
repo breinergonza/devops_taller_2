@@ -1,0 +1,49 @@
+version: 0.2
+
+# AWS CodeBuild buildspec para CI del microservicio de listas negras.
+# Fase install: instala Python y dependencias.
+# Fase pre_build: corre los tests unitarios y genera reportes JUnit + cobertura.
+# Fase build: empaqueta el artefacto desplegable en build/blacklist-service.zip.
+# Fase post_build: marca el fin de la corrida.
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - echo "===> install phase started on `date`"
+      - python -m pip install --upgrade pip
+      - pip install -r requirements.txt
+
+  pre_build:
+    commands:
+      - echo "===> pre_build phase: ejecutando pruebas unitarias"
+      - mkdir -p reports
+      - pytest -v --junitxml=reports/junit.xml --cov=src --cov-report=xml:reports/coverage.xml --cov-report=term-missing
+
+  build:
+    commands:
+      - echo "===> build phase: empaquetando artefacto"
+      - mkdir -p build
+      - zip -r build/blacklist-service.zip . -x "venv/*" "tests/*" "*.git*" "build/*" "reports/*" "__pycache__/*" ".pytest_cache/*"
+      - ls -lh build/
+
+  post_build:
+    commands:
+      - echo "===> post_build phase finished on `date`"
+
+reports:
+  pytest_reports:
+    files:
+      - reports/junit.xml
+    file-format: JUNITXML
+  coverage_report:
+    files:
+      - reports/coverage.xml
+    file-format: COBERTURAXML
+
+artifacts:
+  files:
+    - build/blacklist-service.zip
+  discard-paths: yes
+  name: blacklist-service-$(date +%Y-%m-%d-%H-%M-%S)
