@@ -72,7 +72,7 @@ git push origin master
 
 ## Configuracion en AWS (resumen)
 
-Sigue `../PASO-A-PASO-Entrega-2.md`. Pasos clave:
+Pasos clave:
 
 1. CodeBuild -> Create build project `blacklist-ci`.
 2. Source: GitHub App + repo + filtro `^refs/heads/master$`.
@@ -81,5 +81,3 @@ Sigue `../PASO-A-PASO-Entrega-2.md`. Pasos clave:
 5. Buildspec: usar `buildspec.yml` del repo (no cargar inline).
 6. Artifacts: bucket S3 propio (`blacklist-artifacts-...`).
 7. Logs: CloudWatch group `/aws/codebuild/blacklist-ci`.
-
----
