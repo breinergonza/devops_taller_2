@@ -74,10 +74,10 @@ git push origin master
 
 Pasos clave:
 
-1. CodeBuild -> Create build project `blacklist-ci`.
+1. CodeBuild -> Create build project `taller-2-ci`.
 2. Source: GitHub App + repo + filtro `^refs/heads/master$`.
 3. Webhook: `Rebuild every time a code change is pushed`.
 4. Environment: Ubuntu, runtime Standard, imagen `aws/codebuild/standard:7.0`.
 5. Buildspec: usar `buildspec.yml` del repo (no cargar inline).
-6. Artifacts: bucket S3 propio (`blacklist-artifacts-...`).
-7. Logs: CloudWatch group `/aws/codebuild/blacklist-ci`.
+6. Artifacts: bucket S3 propio (`taller-2-artifacts`).
+7. Logs: CloudWatch group `/aws/codebuild/taller-2-ci`.
