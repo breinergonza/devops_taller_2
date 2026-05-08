@@ -17,7 +17,7 @@ COPY . .
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:5000/ping', timeout=5)"
+    CMD python -c "from urllib import request; request.urlopen('http://localhost:5000/ping', timeout=5)"
 
 # Run with gunicorn in production, flask in development
 CMD ["python", "application.py"]

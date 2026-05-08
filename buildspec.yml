@@ -1,15 +1,11 @@
 version: 0.2
 
-batch:
-  fast-fail: true
-  build-list:
-    - identifier: ci
-      ignore-failure: false
-
 env:
   variables:
-    ARTIFACT_NAME: blacklist-service
-    S3_BUCKET: taller-2-artifacts
+    AWS_ACCOUNT_ID: "820905681257"
+    AWS_DEFAULT_REGION: "us-east-1"
+    IMAGE_REPO_NAME: "blacklist-service"
+    CONTAINER_NAME: "blacklist-container"
   parameter-store:
     DATABASE_URI: /taller2/database-uri
     JWT_SECRET_KEY: /taller2/jwt-secret-key
@@ -20,36 +16,41 @@ phases:
     runtime-versions:
       python: 3.11
     commands:
-      - echo "Installing dependencies..."
-      - python --version
-      - python -m pip install --upgrade pip setuptools wheel
+      - echo "===> install phase"
+      - python -m pip install --upgrade pip
       - pip install -r requirements.txt
 
   pre_build:
     commands:
-      - echo "Running tests..."
+      - echo "===> pre_build phase - running unit tests"
       - mkdir -p reports
       - pytest -v --junitxml=reports/junit.xml --cov=src --cov-report=xml:reports/coverage.xml --cov-report=html:reports/htmlcov --cov-report=term-missing
+      - echo "===> tests passed! Now authenticating with ECR..."
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+      - echo "Image will be pushed as: $REPOSITORY_URI:$IMAGE_TAG and $REPOSITORY_URI:latest"
 
   build:
     commands:
-      - echo "Creating artifact..."
-      - export BUILD_ID=${CODEBUILD_BUILD_NUMBER:-local}
-      - export ARTIFACT_FILE="build/${ARTIFACT_NAME}-${BUILD_ID}.zip"
-      - mkdir -p build
-      - zip -r ${ARTIFACT_FILE} . -x "venv/*" "tests/*" ".git/*" ".github/*" "node_modules/*" ".pytest_cache/*" "__pycache__/*" "*.pyc" ".coverage*" "build/*" "reports/*" ".DS_Store" ".env" ".env.local"
-      - ls -lh build/
+      - echo "===> build phase - building Docker image for blacklist-service"
+      - docker build -t $REPOSITORY_URI:$IMAGE_TAG .
+      - docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:latest
+      - echo "===> Docker image built successfully"
 
   post_build:
     commands:
-      - echo "Uploading to S3..."
-      - export BUILD_ID=${CODEBUILD_BUILD_NUMBER:-local}
-      - export ARTIFACT_FILE="build/${ARTIFACT_NAME}-${BUILD_ID}.zip"
-      - aws s3 cp ${ARTIFACT_FILE} s3://${S3_BUCKET}/builds/${CODEBUILD_BUILD_ID}/ --region us-east-1
-      - echo "Upload complete"
+      - echo "===> post_build phase - pushing image to ECR"
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - docker push $REPOSITORY_URI:latest
+      - echo "===> Image pushed to ECR successfully"
+      - echo "===> creating imagedefinitions.json for CodeDeploy/ECS"
+      - printf '[{"name":"%s","imageUri":"%s"}]' $CONTAINER_NAME $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - cat imagedefinitions.json
 
 reports:
-  junit_report:
+  pytest_reports:
     files:
       - reports/junit.xml
     file-format: JUNITXML
@@ -60,9 +61,10 @@ reports:
 
 artifacts:
   files:
-    - build/*.zip
-  name: BlacklistServiceBuild
-  discard-paths: yes
+    - imagedefinitions.json
+    - appspec.yaml
+    - scripts/**/*
+  name: BlacklistServiceDockerBuild
 
 cache:
   paths:

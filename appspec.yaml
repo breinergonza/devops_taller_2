@@ -1,0 +1,22 @@
+version: 0.0
+
+Resources:
+  - TargetService:
+      Type: AWS::ECS::Service
+      Properties:
+        TaskDefinition: "blacklist-service-task"
+        LoadBalancerInfo:
+          ContainerName: "blacklist-container"
+          ContainerPort: 5000
+        PlatformVersion: "LATEST"
+        NetworkConfiguration:
+          AwsvpcConfiguration:
+            Subnets:
+              - "subnet-08d158cc5c3500ae3"
+            SecurityGroups:
+              - "sg-0a1a4e3d2d2be5e59"
+            AssignPublicIp: "ENABLED"
+
+Hooks:
+  - BeforeInstall: "pre_deployment"
+  - AfterInstall: "post_deployment"
