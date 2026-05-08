@@ -1,0 +1,32 @@
+{
+  "family": "blacklist-service-task",
+  "networkMode": "awsvpc",
+  "executionRoleArn": "arn:aws:iam::820905681257:role/ecsTaskExecutionRole",
+  "cpu": "256",
+  "memory": "512",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "containerDefinitions": [
+    {
+      "name": "blacklist-container",
+      "image": "820905681257.dkr.ecr.us-east-1.amazonaws.com/blacklist-service:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 5000,
+          "hostPort": 5000,
+          "protocol": "tcp"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/blacklist-service",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
