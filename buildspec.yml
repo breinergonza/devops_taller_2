@@ -63,6 +63,7 @@ artifacts:
   files:
     - imagedefinitions.json
     - appspec.yaml
+    - task-def.json
     - scripts/**/*
   name: BlacklistServiceDockerBuild
 

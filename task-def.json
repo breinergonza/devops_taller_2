@@ -10,7 +10,7 @@
   "containerDefinitions": [
     {
       "name": "blacklist-container",
-      "image": "820905681257.dkr.ecr.us-east-1.amazonaws.com/blacklist-service:latest",
+      "image": "<IMAGE1_NAME>",
       "essential": true,
       "portMappings": [
         {
@@ -19,12 +19,33 @@
           "protocol": "tcp"
         }
       ],
+      "secrets": [
+        {
+          "name": "DATABASE_URI",
+          "valueFrom": "arn:aws:ssm:us-east-1:820905681257:parameter/taller2/database-uri"
+        },
+        {
+          "name": "JWT_SECRET_KEY",
+          "valueFrom": "arn:aws:ssm:us-east-1:820905681257:parameter/taller2/jwt-secret-key"
+        },
+        {
+          "name": "STATIC_BEARER",
+          "valueFrom": "arn:aws:ssm:us-east-1:820905681257:parameter/taller2/static-bearer"
+        }
+      ],
+      "environment": [
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        }
+      ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
           "awslogs-group": "/ecs/blacklist-service",
           "awslogs-region": "us-east-1",
-          "awslogs-stream-prefix": "ecs"
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
         }
       }
     }
