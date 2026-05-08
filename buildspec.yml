@@ -45,9 +45,9 @@ phases:
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - docker push $REPOSITORY_URI:latest
       - echo "===> Image pushed to ECR successfully"
-      - echo "===> creating imagedefinitions.json for CodeDeploy/ECS"
-      - printf '[{"name":"%s","imageUri":"%s"}]' $CONTAINER_NAME $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
-      - cat imagedefinitions.json
+      - echo "===> creating imageDetail.json for CodeDeployToECS"
+      - printf '{"ImageURI":"%s"}' $REPOSITORY_URI:$IMAGE_TAG > imageDetail.json
+      - cat imageDetail.json
 
 reports:
   pytest_reports:
@@ -61,7 +61,7 @@ reports:
 
 artifacts:
   files:
-    - imagedefinitions.json
+    - imageDetail.json
     - appspec.yaml
     - task-def.json
     - scripts/**/*
