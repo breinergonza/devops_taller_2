@@ -1,83 +1,131 @@
-# Fuente de Actividades CI/CD
+# Fuente de Actividades CI/CD - DevOps
 
 ## Grupo: The Last One
 
 - Integrante: Breitner Enrique Gonzalez Angarita
 
-Taller 2: Integración Continua (CI)
+Este repositorio contiene el código fuente y las configuraciones de todas las entregas y talleres prácticos de la materia de DevOps. Incluye la creación del microservicio, configuración de pruebas, integración continua (CI) y despliegue continuo (CD) usando AWS.
 
-Continuacion del microservicio de la Entrega 1, esta vez con un pipeline de **Integracion Continua** sobre AWS CodeBuild que se dispara con cada commit en `master`/`main`, ejecuta las pruebas unitarias y genera el artefacto desplegable.
+## Componentes principales del Proyecto
 
-## Componentes principales del CI
-
-| Archivo | Proposito |
+| Archivo / Directorio | Propósito |
 |---|---|
-| `buildspec.yml` | Receta que CodeBuild ejecuta (install -> pre_build -> build -> post_build). |
-| `tests/` | Tests unitarios con `pytest` (un escenario por endpoint + casos de error). |
-| `requirements.txt` | Incluye `pytest` y `pytest-cov` ademas de las libs de la app. |
-| `pytest.ini` | Configuracion de descubrimiento de pruebas. |
+| `src/` | Código fuente del microservicio Flask (modelos, esquemas, vistas). |
+| `tests/` | Tests unitarios con `pytest` para garantizar la calidad del código. |
+| `Dockerfile` | Configuración para contenerizar el microservicio. |
+| `docker-compose.yml` | Orquestación local del servicio. |
+| `buildspec.yml` | Receta de AWS CodeBuild para la etapa de construcción, pruebas y creación de imagen Docker. |
+| `appspec.yaml` | Configuración para AWS CodeDeploy (Despliegue Blue/Green en ECS). |
+| `task-def.json` | Definición de tareas para AWS ECS Fargate. |
+| `requirements.txt` | Dependencias del proyecto en Python. |
 
-## Estructura
+## Estructura del Proyecto
 
 ```
-devops_taller_2/
-|-- application.py
-|-- Procfile
-|-- requirements.txt
-|-- buildspec.yml             # <-- AWS CodeBuild
-|-- pytest.ini
-|-- .ebextensions/01_env.config
-|-- src/
+devops_taller_3/
+|-- application.py            # Punto de entrada de la aplicación
+|-- Dockerfile                # Receta de la imagen Docker
+|-- docker-compose.yml        # Configuración para ejecutar con Docker a nivel local
+|-- requirements.txt          # Dependencias de Python
+|-- buildspec.yml             # <-- AWS CodeBuild config
+|-- appspec.yaml              # <-- AWS CodeDeploy config
+|-- task-def.json             # <-- AWS ECS Task Definition
+|-- pytest.ini                # Configuración de pytest
+|-- src/                      # Código base del microservicio
 |   |-- main.py
-|   |-- models/blacklist.py
-|   |-- schemas/blacklist_schema.py
-|   `-- views/blacklist_view.py
-`-- tests/
-    |-- conftest.py            # fixtures comunes
-    |-- test_health.py
-    |-- test_blacklist_post.py
-    `-- test_blacklist_get.py
+|   |-- models/
+|   |-- schemas/
+|   `-- views/
+|-- tests/                    # Pruebas unitarias
+|   |-- conftest.py
+|   |-- test_health.py
+|   |-- test_blacklist_post.py
+|   `-- test_blacklist_get.py
+`-- scripts/                  # Scripts útiles para hooks de despliegue
+    |-- pre_deployment.sh
+    `-- post_deployment.sh
 ```
 
-## Ejecutar las pruebas localmente
+### Diagrama de Componentes
 
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-pytest --cov=src --cov-report=term-missing
+```mermaid
+graph TD
+    Client["Cliente REST"] --> API["API REST (Flask)"]
+    
+    subgraph "Microservicio de Blacklist"
+        API --> Vistas["Controladores (views/)"]
+        Vistas --> Esquemas["Validación (schemas/)"]
+        Vistas --> Modelos["Modelos (models/)"]
+    end
+    
+    Modelos --> DB[("Base de Datos")]
 ```
 
-Resultado esperado: todas las pruebas en verde y cobertura > 80% sobre `src/`.
+## Ejecución del proyecto
 
-## Flujo del Pipeline de CI
+### Ejecución Local (Sin Docker)
 
-1. Push a `master` -> webhook de GitHub dispara CodeBuild.
-2. `install` -> instala Python 3.11 + dependencias.
-3. `pre_build` -> corre `pytest` y publica reportes JUnit y de cobertura.
-4. `build` -> empaqueta `blacklist-service.zip` listo para desplegar.
-5. `post_build` -> marca el fin.
-6. Artefacto zip se sube al bucket S3 configurado en CodeBuild.
+1. Crear un entorno virtual y activarlo:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # En Windows usar: venv\Scripts\activate
+   ```
 
-> No se incluye etapa de Deploy: la entrega es solamente CI.
+2. Instalar las dependencias:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## Forzar un build fallido (para evidencia)
+3. Ejecutar la aplicación:
+   ```bash
+   python application.py
+   ```
+   *La aplicación estará disponible en `http://localhost:5000`*
 
-Edita `tests/test_blacklist_post.py` y cambia un `assert` para que falle, haz commit y push. Documenta los logs y luego revierte el cambio:
+4. Ejecutar las pruebas localmente:
+   ```bash
+   pytest --cov=src --cov-report=term-missing
+   ```
 
-```bash
-git revert HEAD
-git push origin master
+### Ejecución Local (Con Docker)
+
+1. Construir e iniciar los contenedores en segundo plano:
+   ```bash
+   docker-compose up -d --build
+   ```
+
+2. La aplicación estará disponible en `http://localhost:5000`.
+
+3. Para ver los logs de los contenedores:
+   ```bash
+   docker-compose logs -f
+   ```
+
+4. Para detener y eliminar los contenedores:
+   ```bash
+   docker-compose down
+   ```
+
+## Flujo de CI/CD (AWS)
+
+1. **Integración Continua (CI):** Un push a la rama principal o configurada dispara el pipeline. AWS CodeBuild (mediante `buildspec.yml`) ejecuta las pruebas unitarias, construye la imagen de Docker y la publica en Amazon ECR.
+2. **Despliegue Continuo (CD):** AWS CodePipeline toma la nueva imagen y a través de AWS CodeDeploy actualiza el servicio en AWS ECS (Fargate). Se utiliza una estrategia de despliegue Blue/Green para asegurar una transición sin interrupciones ni tiempos de inactividad (Zero Downtime).
+
+### Diagrama de Despliegue y Ramas (Flujo de Trabajo)
+
+```mermaid
+graph LR
+    Dev("Desarrolladores") -->|Commits / Push| QA["Rama: qa"]
+    QA -->|Merge / Pull Request| STG["Rama: staging"]
+    STG -->|Merge / Pull Request| MAIN["Rama: main"]
+    
+    QA -.->|Pipeline CI/CD| EnvQA[("Entorno QA")]
+    STG -.->|Pipeline CI/CD| EnvSTG[("Entorno Staging")]
+    MAIN -.->|Pipeline CI/CD| EnvPROD[("Entorno Producción")]
+    
+    classDef branch fill:#f9d0c4,stroke:#333,stroke-width:2px,color:black;
+    classDef env fill:#d4e6f1,stroke:#333,stroke-width:2px,color:black;
+    
+    class QA,STG,MAIN branch;
+    class EnvQA,EnvSTG,EnvPROD env;
 ```
-
-## Configuracion en AWS (resumen)
-
-Pasos clave:
-
-1. CodeBuild -> Create build project `taller-2-ci`.
-2. Source: GitHub App + repo + filtro `^refs/heads/master$`.
-3. Webhook: `Rebuild every time a code change is pushed`.
-4. Environment: Ubuntu, runtime Standard, imagen `aws/codebuild/standard:7.0`.
-5. Buildspec: usar `buildspec.yml` del repo (no cargar inline).
-6. Artifacts: bucket S3 propio (`taller-2-artifacts`).
-7. Logs: CloudWatch group `/aws/codebuild/taller-2-ci`.
