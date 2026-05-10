@@ -1,4 +1,4 @@
-# devops_taller_2
+# Fuente de Actividades CI/CD
 
 ## Grupo: The Last One
 
