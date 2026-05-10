@@ -3,6 +3,8 @@
 ## Grupo: The Last One
 
 - Integrante: Breitner Enrique Gonzalez Angarita
+- Codigo: 202217107
+- Correo: b.gonzalez@uniandes.edu.co
 
 Este repositorio contiene el código fuente y las configuraciones de todas las entregas y talleres prácticos de la materia de DevOps. Incluye la creación del microservicio, configuración de pruebas, integración continua (CI) y despliegue continuo (CD) usando AWS.
 
@@ -132,7 +134,7 @@ graph LR
 
 ## Pruebas con Postman
 
-En la raíz del repositorio se encuentra el archivo `postman_collection.json`, el cual puedes importar directamente en Postman para probar todos los endpoints y visualizar ejemplos de respuestas de error y éxito.
+En la raíz del repositorio se encuentra el archivo `postman_collection.json`, el cual se puede importar directamente en Postman para probar todos los endpoints y visualizar ejemplos de respuestas de error y éxito.
 
 ### Detalles de la API
 
