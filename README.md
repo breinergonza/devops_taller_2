@@ -129,3 +129,42 @@ graph LR
     class QA,STG,MAIN branch;
     class EnvQA,EnvSTG,EnvPROD env;
 ```
+
+## Pruebas con Postman
+
+En la raíz del repositorio se encuentra el archivo `postman_collection.json`, el cual puedes importar directamente en Postman para probar todos los endpoints y visualizar ejemplos de respuestas de error y éxito.
+
+### Detalles de la API
+
+La colección incluye las variables necesarias para funcionar. Los endpoints protegidos usan un token estático configurado en las variables de entorno de la aplicación.
+
+*   **Token (Bearer Token):** `uniandes-devops-2026`
+*   **Base URL (Local):** `http://localhost:5000` (El puerto por defecto de Flask. Si usas Docker, valida el mapeo de puertos).
+
+### Endpoints Disponibles
+
+#### 1. Health Check (Público)
+*   **Método:** `GET`
+*   **Ruta:** `/ping`
+*   **Descripción:** Endpoint público que responde con un estado de salud (`{"status": "ok"}`) y un timestamp.
+
+#### 2. Service Info (Público)
+*   **Método:** `GET`
+*   **Ruta:** `/`
+*   **Descripción:** Retorna el nombre del servicio.
+
+#### 3. Agregar Email a la Lista Negra (Privado)
+*   **Método:** `POST`
+*   **Ruta:** `/blacklists`
+*   **Autenticación:** Bearer Token
+*   **Headers:** `Content-Type: application/x-www-form-urlencoded`
+*   **Body:**
+    *   `email`: El email que deseas bloquear.
+    *   `app_uuid`: Identificador único de la app solicitante (ej. `11111111-1111-1111-1111-111111111111`).
+    *   `blocked_reason`: (Opcional) Motivo por el cual fue bloqueado.
+
+#### 4. Consultar si un Email está en la Lista Negra (Privado)
+*   **Método:** `GET`
+*   **Ruta:** `/blacklists/{email}`
+*   **Autenticación:** Bearer Token
+*   **Descripción:** Verifica si el email provisto en la URL existe en la lista negra. Retorna un booleano `in_blacklist` y el `blocked_reason` si aplica.
