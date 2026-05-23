@@ -52,8 +52,7 @@ def create_app(test_config=None):
     if test_config is not None:
         app.config.update(test_config)
 
-    # Yo enriquezco cada request con atributos de baja cardinalidad para poder
-    # filtrar en New Relic sin enviar datos sensibles como emails o tokens.
+    # Agrego contexto basico a New Relic.
     app.before_request(record_request_context)
 
     db.init_app(app)
@@ -206,9 +205,7 @@ def create_app(test_config=None):
         return jsonify(new_relic_status())
 
     if app.config["ENABLE_ERROR_TEST_ENDPOINT"]:
-        # Yo dejo este endpoint apagado por defecto para no abrir un 500 publico.
-        # Lo activo solo durante la sustentacion o pruebas controladas si necesito
-        # demostrar Errors Inbox en New Relic.
+        # Activo este 500 solo para pruebas controladas.
         @app.route("/debug/newrelic-error")
         def debug_newrelic_error():
             raise RuntimeError("Error controlado para validar New Relic Errors Inbox")
