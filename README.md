@@ -255,14 +255,14 @@ graph TD
     classDef ssm fill:#1E88E5,stroke:#1565C0,stroke-width:2px,color:white;
     
     subgraph "Control de Versiones"
-        Github["GitHub Repo (devops_taller_2)"]
+        Github["GitHub Repo - devops_taller_2"]
     end
     
     subgraph "Pipeline de CI/CD (AWS)"
-        CP["AWS CodePipeline (taller-3-pipeline)"]
-        CB["AWS CodeBuild (taller-2-ci)"]
-        CD["AWS CodeDeploy (blacklist-dg)"]
-        ECR[("Amazon ECR (blacklist-service)")]
+        CP["AWS CodePipeline - taller-3-pipeline"]
+        CB["AWS CodeBuild - taller-2-ci"]
+        CD["AWS CodeDeploy - blacklist-dg"]
+        ECR[("Amazon ECR - blacklist-service")]
     end
 
     subgraph "Parámetros y Secretos (AWS)"
@@ -274,25 +274,25 @@ graph TD
     end
 
     subgraph "Infraestructura de Red (AWS VPC)"
-        ALB["Application Load Balancer (blacklist-alb)"]
-        Port80["Puerto 80 (Producción)"]
-        Port8080["Puerto 8080 (Pruebas)"]
+        ALB["Application Load Balancer - blacklist-alb"]
+        Port80["Puerto 80 - Producción"]
+        Port8080["Puerto 8080 - Pruebas"]
         
-        TG_Green["Target Group Green (blacklist-tg-green)"]
-        TG_Blue["Target Group Blue (blacklist-tg-blue)"]
+        TG_Green["Target Group Green - blacklist-tg-green"]
+        TG_Blue["Target Group Blue - blacklist-tg-blue"]
         
         subgraph "AWS ECS Fargate Cluster (taller-3-cluster)"
             subgraph "Servicio de Lista Negra (blacklist-service)"
                 subgraph "Fargate Task (blacklist-service-task)"
-                    AppContainer["App Container (Gunicorn + Flask API)"]
-                    Sidecar["Sidecar Container (newrelic-infra)"]
+                    AppContainer["App Container - Gunicorn + Flask API"]
+                    Sidecar["Sidecar Container - newrelic-infra"]
                 end
             end
         end
     end
 
     subgraph "Monitoreo y Diagnóstico"
-        CW[("AWS CloudWatch Logs (/ecs/blacklist-service)")]
+        CW["AWS CloudWatch Logs - /ecs/blacklist-service"]
     end
 
     %% Relaciones de flujo
@@ -300,17 +300,17 @@ graph TD
     CP -->|Orquesta| CB
     CP -->|Orquesta| CD
     
-    CB -->|1. Pytest Unit Tests| CB
-    CB -->|2. Docker Build & Tag| ECR
+    CB -->|"1. Pytest Unit Tests"| CB
+    CB -->|"2. Docker Build & Tag"| ECR
     
-    CD -->|3. ECS Blue/Green Deploy| TG_Blue
-    CD -->|3. ECS Blue/Green Deploy| TG_Green
+    CD -->|"3. ECS Blue/Green Deploy"| TG_Blue
+    CD -->|"3. ECS Blue/Green Deploy"| TG_Green
     
     ALB --> Port80
     ALB --> Port8080
     
-    Port80 -->|Tráfico Producción (100%)| TG_Blue
-    Port8080 -->|Tráfico Test (0%)| TG_Green
+    Port80 -->|"Tráfico Producción (100%)"| TG_Blue
+    Port8080 -->|"Tráfico Test (0%)"| TG_Green
     
     TG_Blue --> AppContainer
     TG_Green --> AppContainer
@@ -321,8 +321,8 @@ graph TD
     SSM --> BEARER
     SSM --> NR_KEY
     
-    DB_URI & JWT & BEARER & NR_KEY -.->|Inyección Segura de Secretos| AppContainer
-    NR_KEY -.->|Inyección Segura de Licencia| Sidecar
+    DB_URI & JWT & BEARER & NR_KEY -.->|"Inyección Segura de Secretos"| AppContainer
+    NR_KEY -.->|"Inyección Segura de Licencia"| Sidecar
     
     %% Logs
     AppContainer & Sidecar -->|Streaming de Logs| CW
@@ -332,59 +332,7 @@ graph TD
     class SSM,DB_URI,JWT,BEARER,NR_KEY ssm;
 ```
 
-### 2. Arquitectura de Monitoreo con New Relic
-
-El siguiente diagrama presenta cómo se integra New Relic en el microservicio tanto a nivel de agente APM (para trazas, transacciones de Flask y logs enriquecidos del servidor de aplicación) como a nivel de infraestructura Fargate (mediante la recolección activa de métricas del sidecar `nri-ecs`), cubriendo tanto el entorno local como el productivo en la nube.
-
-```mermaid
-graph TD
-    classDef app fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px;
-    classDef nr fill:#008C99,stroke:#005C66,stroke-width:2px,color:white;
-    classDef local fill:#ECEFF1,stroke:#455A64,stroke-width:2px;
-    classDef fargate fill:#FFE0B2,stroke:#E65100,stroke-width:2px;
-
-    subgraph "Entorno Local (Docker Compose)"
-        LocalApp["Flask App Container"] -->|newrelic-admin APM Agent| NR_APM_Dev["New Relic APM (devops-taller-4-flask-development)"]
-        LocalInfra["newrelic-infra Container"] -->|Docker Socket & Host Mounts| NR_Infra_Dev["New Relic Infrastructure (devops-taller-4-local)"]
-    end
-
-    subgraph "Entorno Producción (AWS ECS Fargate)"
-        subgraph "Fargate Task (blacklist-service-task)"
-            ProdApp["Flask App Container"]
-            ProdSidecar["newrelic-infra Sidecar (nri-ecs)"]
-        end
-    end
-
-    subgraph "New Relic Cloud Platform"
-        APM[("New Relic APM\n- devops-taller-4-flask (production)\n- Traces, APDEX, Transactions")]
-        Infra[("New Relic Infrastructure\n- Host & Container CPU/Mem\n- NRI-ECS integration")]
-        Logs[("New Relic Logs\n- Gunicorn stdout\n- App Logs Forwarding")]
-        Errors[("New Relic Errors Inbox\n- Controlled error testing\n- Alerting")]
-    end
-
-    %% Flujos de Telemetría APM
-    ProdApp -->|1. APM Python Agent Wrapper\n- newrelic.agent.add_custom_attribute\n- Obfuscated SQL tracing\n- APDEX metrics| APM
-    
-    %% Logs
-    ProdApp -->|2. Logs Forwarding\n- application_logging.forwarding.enabled=true\n- Structured formatting| Logs
-    
-    %% Sidecar Infraestructura
-    ProdSidecar -->|3. Container Metrics scraping\n- ECS Metadata API V4\n- CPU, Memory, Network| Infra
-    
-    %% Errors Inbox
-    ProdApp -.->|4. Error ingestion\n- /debug/newrelic-error| Errors
-
-    %% Relaciones locales y mapeo global
-    NR_APM_Dev -.->|Métricas Desarrollo| APM
-    NR_Infra_Dev -.->|Métricas Desarrollo| Infra
-
-    class ProdApp,LocalApp app;
-    class APM,Infra,Logs,Errors nr;
-    class LocalInfra,NR_APM_Dev,NR_Infra_Dev local;
-    class ProdSidecar fargate;
-```
-
-### 3. Arquitectura de Infraestructura en AWS
+### 2. Arquitectura de Infraestructura en AWS
 
 El siguiente diagrama detalla la arquitectura puramente de infraestructura y redes en AWS. Muestra la VPC, la distribución de subredes públicas y privadas, el ruteo a través del balanceador de carga ALB, el rol del grupo de seguridad, las tareas del clúster de ECS Fargate y la conexión directa a la base de datos relacional AWS RDS PostgreSQL:
 
@@ -396,47 +344,101 @@ graph TD
     classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:white;
     classDef db fill:#336791,stroke:#20405B,stroke-width:2px,color:white;
 
-    subgraph AWS_Cloud["AWS Cloud (us-east-1)"]
-        subgraph VPC["AWS VPC (vpc-0af5df0c0c5347b86)"]
+    subgraph AWS_Cloud["AWS Cloud - us-east-1"]
+        subgraph VPC["AWS VPC - vpc-0af5df0c0c5347b86"]
             
-            subgraph Subnet_1A["Subred Pública us-east-1a (subnet-08d158cc5c3500ae3)"]
-                ALB_1A["ALB Node (Port 80 / 8080)"]
-                Task_1A["ECS Task (blacklist-service-task:12)"]
+            subgraph Subnet_1A["Subred Pública us-east-1a - subnet-08d158cc5c3500ae3"]
+                ALB_1A["ALB Node - Port 80 / 8080"]
+                Task_1A["ECS Task - blacklist-service-task:12"]
             end
 
-            subgraph Subnet_1B["Subred Pública us-east-1b (subnet-00d1c7d418125f884)"]
-                ALB_1B["ALB Node (Port 80 / 8080)"]
-                Task_1B["ECS Task (Obsoleto / Draining)"]
+            subgraph Subnet_1B["Subred Pública us-east-1b - subnet-00d1c7d418125f884"]
+                ALB_1B["ALB Node - Port 80 / 8080"]
+                Task_1B["ECS Task - Obsoleto / Draining"]
             end
 
-            ALB["Application Load Balancer (blacklist-alb)"]
+            ALB["Application Load Balancer - blacklist-alb"]
             ALB -.-> ALB_1A
             ALB -.-> ALB_1B
 
-            subgraph Security_Group["Security Group (sg-0a1a4e3d2d2be5e59)"]
-                ALB_1A & ALB_1B -->|HTTP Port 5000| Task_1A
+            subgraph Security_Group["Security Group - sg-0a1a4e3d2d2be5e59"]
+                ALB_1A & ALB_1B -->|"HTTP Port 5000"| Task_1A
             end
 
             subgraph RDS_Subnets["Capa de Base de Datos"]
-                RDS[("AWS RDS PostgreSQL\n(taller-1-api-db)\nPort 5432")]
+                RDS["AWS RDS PostgreSQL - taller-1-api-db - Port 5432"]
             end
 
-            Task_1A -->|Lectura/Escritura PostgreSQL| RDS
+            Task_1A -->|"Lectura / Escritura PostgreSQL"| RDS
         end
 
         SSM["AWS SSM Parameter Store"]
         CW["Amazon CloudWatch Logs"]
 
-        SSM -.->|Inyección en Boot| Task_1A
-        Task_1A -->|Streaming de Logs| CW
+        SSM -.->|"Inyección en Boot"| Task_1A
+        Task_1A -->|"Streaming de Logs"| CW
     end
 
-    Internet["Usuarios / Clientes (Internet)"] -->|Puerto 80 / 8080| ALB
+    Internet["Usuarios / Clientes"] -->|"Puerto 80 / 8080"| ALB
 
     class ALB,Task_1A,Task_1B,CW aws;
     class RDS db;
     class VPC vpc;
     class Subnet_1A,Subnet_1B,RDS_Subnets subnet;
 ```
+
+### 3. Arquitectura de Monitoreo con New Relic
+
+El siguiente diagrama presenta cómo se integra New Relic en el microservicio tanto a nivel de agente APM (para trazas, transacciones de Flask y logs enriquecidos del servidor de aplicación) como a nivel de infraestructura Fargate (mediante la recolección activa de métricas del sidecar `nri-ecs`), cubriendo tanto el entorno local como el productivo en la nube.
+
+```mermaid
+graph TD
+    classDef app fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px;
+    classDef nr fill:#008C99,stroke:#005C66,stroke-width:2px,color:white;
+    classDef local fill:#ECEFF1,stroke:#455A64,stroke-width:2px;
+    classDef fargate fill:#FFE0B2,stroke:#E65100,stroke-width:2px;
+
+    subgraph "Entorno Local (Docker Compose)"
+        LocalApp["Flask App Container"] -->|"newrelic-admin APM Agent"| NR_APM_Dev["New Relic APM - devops-taller-4-flask-development"]
+        LocalInfra["newrelic-infra Container"] -->|"Docker Socket & Host Mounts"| NR_Infra_Dev["New Relic Infrastructure - devops-taller-4-local"]
+    end
+
+    subgraph "Entorno Producción (AWS ECS Fargate)"
+        subgraph "Fargate Task (blacklist-service-task)"
+            ProdApp["Flask App Container"]
+            ProdSidecar["newrelic-infra Sidecar - nri-ecs"]
+        end
+    end
+
+    subgraph "New Relic Cloud Platform"
+        APM["New Relic APM - devops-taller-4-flask production - Traces, APDEX, Transactions"]
+        Infra["New Relic Infrastructure - Host & Container CPU/Mem - NRI-ECS integration"]
+        Logs["New Relic Logs - Gunicorn stdout - App Logs Forwarding"]
+        Errors["New Relic Errors Inbox - Controlled error testing - Alerting"]
+    end
+
+    %% Flujos de Telemetría APM
+    ProdApp -->|"1. APM Python Agent Wrapper (add_custom_attribute, Obfuscated SQL, APDEX)"| APM
+    
+    %% Logs
+    ProdApp -->|"2. Logs Forwarding (forwarding.enabled=true)"| Logs
+    
+    %% Sidecar Infraestructura
+    ProdSidecar -->|"3. Container Metrics scraping (ECS Metadata API V4)"| Infra
+    
+    %% Errors Inbox
+    ProdApp -.->|"4. Error ingestion (/debug/newrelic-error)"| Errors
+
+    %% Relaciones locales y mapeo global
+    NR_APM_Dev -.->|"Métricas Desarrollo"| APM
+    NR_Infra_Dev -.->|"Métricas Desarrollo"| Infra
+
+    class ProdApp,LocalApp app;
+    class APM,Infra,Logs,Errors nr;
+    class LocalInfra,NR_APM_Dev,NR_Infra_Dev local;
+    class ProdSidecar fargate;
+```
+
+
 
 
