@@ -123,7 +123,7 @@ class BlacklistResource(Resource):
                 "msg": "blocked_reason no puede superar 255 caracteres"
             }, 400
 
-        # Yo envio solo el dominio para evitar exponer el email completo en APM.
+        # Envio solo el dominio, no el email completo.
         email_domain = args["email"].split("@")[-1] if "@" in args["email"] else "invalid"
         add_custom_attribute("blacklist_email_domain", email_domain)
 
@@ -180,7 +180,7 @@ class BlacklistByEmailResource(Resource):
         if not _is_authorized():
             return {"msg": "Unauthorized"}, 401
 
-        # Yo registro el dominio consultado sin guardar el email completo.
+        # Registro el dominio consultado.
         email_domain = email.split("@")[-1] if "@" in email else "invalid"
         add_custom_attribute("blacklist_lookup_domain", email_domain)
 
