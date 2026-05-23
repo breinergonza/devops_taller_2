@@ -31,12 +31,48 @@
         {
           "name": "STATIC_BEARER",
           "valueFrom": "arn:aws:ssm:us-east-1:820905681257:parameter/taller2/static-bearer"
+        },
+        {
+          "name": "NEW_RELIC_LICENSE_KEY",
+          "valueFrom": "arn:aws:ssm:us-east-1:820905681257:parameter/taller4/NEW_RELIC_LICENSE_KEY"
         }
       ],
       "environment": [
         {
           "name": "ENVIRONMENT",
           "value": "production"
+        },
+        {
+          "name": "NEW_RELIC_APP_NAME",
+          "value": "devops-taller-4-flask (production)"
+        },
+        {
+          "name": "NEW_RELIC_CONFIG_FILE",
+          "value": "/app/newrelic.ini"
+        },
+        {
+          "name": "NEW_RELIC_ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "NEW_RELIC_DISTRIBUTED_TRACING_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "NEW_RELIC_LOG",
+          "value": "stdout"
+        },
+        {
+          "name": "NEW_RELIC_LOG_LEVEL",
+          "value": "info"
+        },
+        {
+          "name": "NEW_RELIC_LABELS",
+          "value": "env:prod;service:blacklist;project:devops-taller-4"
+        },
+        {
+          "name": "ENABLE_ERROR_TEST_ENDPOINT",
+          "value": "false"
         }
       ],
       "logConfiguration": {
@@ -45,6 +81,44 @@
           "awslogs-group": "/ecs/blacklist-service",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
+        }
+      }
+    },
+    {
+      "name": "newrelic-infra",
+      "image": "newrelic/nri-ecs:1.10.0",
+      "essential": false,
+      "secrets": [
+        {
+          "name": "NRIA_LICENSE_KEY",
+          "valueFrom": "arn:aws:ssm:us-east-1:820905681257:parameter/taller4/NEW_RELIC_LICENSE_KEY"
+        }
+      ],
+      "environment": [
+        {
+          "name": "FARGATE",
+          "value": "true"
+        },
+        {
+          "name": "NRIA_IS_FORWARD_ONLY",
+          "value": "true"
+        },
+        {
+          "name": "NRIA_PASSTHROUGH_ENVIRONMENT",
+          "value": "ECS_CONTAINER_METADATA_URI,ECS_CONTAINER_METADATA_URI_V4,FARGATE"
+        },
+        {
+          "name": "NRIA_CUSTOM_ATTRIBUTES",
+          "value": "{\"environment\":\"production\",\"project\":\"devops-taller-4\",\"service\":\"blacklist\"}"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/blacklist-service",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "newrelic-infra",
           "awslogs-create-group": "true"
         }
       }
