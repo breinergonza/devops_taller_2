@@ -20,6 +20,8 @@ Este repositorio contiene el código fuente y las configuraciones de todas las e
 | `appspec.yaml` | Configuración para AWS CodeDeploy (Despliegue Blue/Green en ECS). |
 | `task-def.json` | Definición de tareas para AWS ECS Fargate. |
 | `requirements.txt` | Dependencias del proyecto en Python. |
+| `newrelic.ini` | Configuración versionada del agente New Relic sin license key. |
+| `scripts/stress_test.js` | Escenario k6 para generar tráfico y analizar New Relic. |
 
 ## Estructura del Proyecto
 
@@ -32,6 +34,7 @@ devops_taller_3/
 |-- buildspec.yml             # <-- AWS CodeBuild config
 |-- appspec.yaml              # <-- AWS CodeDeploy config
 |-- task-def.json             # <-- AWS ECS Task Definition
+|-- newrelic.ini              # <-- Configuración APM de New Relic
 |-- pytest.ini                # Configuración de pytest
 |-- src/                      # Código base del microservicio
 |   |-- main.py
@@ -45,7 +48,8 @@ devops_taller_3/
 |   `-- test_blacklist_get.py
 `-- scripts/                  # Scripts útiles para hooks de despliegue
     |-- pre_deployment.sh
-    `-- post_deployment.sh
+    |-- post_deployment.sh
+    `-- stress_test.js
 ```
 
 ### Diagrama de Componentes
@@ -107,6 +111,72 @@ graph TD
    ```bash
    docker-compose down
    ```
+
+## Monitoreo continuo con New Relic
+
+La aplicación queda instrumentada con el agente Python de New Relic y se ejecuta con Gunicorn mediante `newrelic-admin run-program`, que es la forma recomendada para que el agente se inicialice antes de los workers.
+
+### Variables locales
+
+En local uso `.env.local` para cargar la licencia y las variables de New Relic. Ese archivo no debe versionarse.
+
+Variables esperadas:
+
+```bash
+NEW_RELIC_LICENSE_KEY=<ingest_license_key>
+NEW_RELIC_APP_NAME=devops-taller-4-flask
+NEW_RELIC_ENVIRONMENT=development
+NEW_RELIC_CONFIG_FILE=/app/newrelic.ini
+NEW_RELIC_LOG=stdout
+NEW_RELIC_LOG_LEVEL=info
+NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
+```
+
+### Variables en AWS Fargate
+
+En AWS no guardo la licencia en archivos ni en la imagen Docker. La tarea de ECS la recibe desde AWS Systems Manager Parameter Store:
+
+```text
+/taller4/NEW_RELIC_LICENSE_KEY
+```
+
+El archivo `task-def.json` inyecta ese parámetro como `NEW_RELIC_LICENSE_KEY` en el contenedor de la aplicación y como `NRIA_LICENSE_KEY` en el sidecar `newrelic-infra`.
+
+### Validación rápida
+
+1. Levantar localmente:
+   ```bash
+   docker compose up --build
+   ```
+2. Generar tráfico:
+   ```bash
+   for i in $(seq 1 50); do curl -s http://localhost:5002/ping; done
+   ```
+3. Revisar el endpoint seguro de configuración:
+   ```bash
+   curl http://localhost:5002/observability/newrelic
+   ```
+4. Verificar en New Relic APM la aplicación `devops-taller-4-flask (development)`.
+
+### Pruebas de stress
+
+Con k6:
+
+```bash
+BASE_URL=http://localhost:5002 TOKEN=uniandes-devops-2026 k6 run scripts/stress_test.js
+```
+
+Para Fargate, cambiar `BASE_URL` por el DNS del ALB. Yo uso esta ejecución para capturar evidencias de tiempo de respuesta, DB, Apdex, errores y alertas.
+
+### Error controlado para sustentación
+
+El endpoint `/debug/newrelic-error` está apagado por defecto. Si necesito demostrar Errors Inbox en una prueba controlada, activo:
+
+```bash
+ENABLE_ERROR_TEST_ENDPOINT=true
+```
+
+Después ejecuto `GET /debug/newrelic-error` y vuelvo a dejar la variable en `false`.
 
 ## Flujo de CI/CD (AWS)
 

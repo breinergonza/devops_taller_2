@@ -15,6 +15,7 @@ from flask_restful import Resource
 
 from src.main import db
 from src.models.blacklist import Blacklist
+from src.observability import add_custom_attribute
 
 
 def _is_authorized():
@@ -110,14 +111,21 @@ class BlacklistResource(Resource):
         args = _payload()
 
         if not args.get("email"):
+            add_custom_attribute("validation_error", "missing_email")
             return {"msg": "email es obligatorio"}, 400
         if not args.get("app_uuid"):
+            add_custom_attribute("validation_error", "missing_app_uuid")
             return {"msg": "app_uuid es obligatorio"}, 400
 
         if args.get("blocked_reason") and len(args["blocked_reason"]) > 255:
+            add_custom_attribute("validation_error", "blocked_reason_too_long")
             return {
                 "msg": "blocked_reason no puede superar 255 caracteres"
             }, 400
+
+        # Yo envio solo el dominio para evitar exponer el email completo en APM.
+        email_domain = args["email"].split("@")[-1] if "@" in args["email"] else "invalid"
+        add_custom_attribute("blacklist_email_domain", email_domain)
 
         # IP origen del request (X-Forwarded-For si esta detras de un ALB)
         forwarded = request.headers.get("X-Forwarded-For", "")
@@ -171,6 +179,10 @@ class BlacklistByEmailResource(Resource):
     def get(self, email):
         if not _is_authorized():
             return {"msg": "Unauthorized"}, 401
+
+        # Yo registro el dominio consultado sin guardar el email completo.
+        email_domain = email.split("@")[-1] if "@" in email else "invalid"
+        add_custom_attribute("blacklist_lookup_domain", email_domain)
 
         entry = (
             Blacklist.query.filter_by(email=email)

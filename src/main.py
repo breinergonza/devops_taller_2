@@ -15,6 +15,8 @@ from flask_jwt_extended import JWTManager
 from flask_restful import Api
 from flasgger import Flasgger
 
+from src.observability import new_relic_status, record_request_context
+
 # Cargar variables de entorno
 env_file = os.environ.get("ENV_FILE", ".env.local")
 env_path = Path(__file__).parent.parent / env_file
@@ -43,9 +45,16 @@ def create_app(test_config=None):
         "STATIC_BEARER", "uniandes-devops-2026"
     )
     app.config["ENVIRONMENT"] = os.environ.get("ENVIRONMENT", "local")
+    app.config["ENABLE_ERROR_TEST_ENDPOINT"] = (
+        os.environ.get("ENABLE_ERROR_TEST_ENDPOINT", "false").lower() == "true"
+    )
 
     if test_config is not None:
         app.config.update(test_config)
+
+    # Yo enriquezco cada request con atributos de baja cardinalidad para poder
+    # filtrar en New Relic sin enviar datos sensibles como emails o tokens.
+    app.before_request(record_request_context)
 
     db.init_app(app)
     jwt.init_app(app)
@@ -190,6 +199,19 @@ def create_app(test_config=None):
                 "endpoints": ["/ping", "/blacklists", "/blacklists/<email>", "/api/docs"],
             }
         )
+
+    @app.route("/observability/newrelic")
+    def observability_newrelic():
+        """Devuelvo una verificacion segura de la configuracion de New Relic."""
+        return jsonify(new_relic_status())
+
+    if app.config["ENABLE_ERROR_TEST_ENDPOINT"]:
+        # Yo dejo este endpoint apagado por defecto para no abrir un 500 publico.
+        # Lo activo solo durante la sustentacion o pruebas controladas si necesito
+        # demostrar Errors Inbox en New Relic.
+        @app.route("/debug/newrelic-error")
+        def debug_newrelic_error():
+            raise RuntimeError("Error controlado para validar New Relic Errors Inbox")
 
     # Inicializar las tablas
     with app.app_context():
