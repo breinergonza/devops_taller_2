@@ -4,6 +4,9 @@ venv/
 __pycache__
 *.pyc
 .pytest_cache
+.env
+.env.*
+!.env.aws.template
 .env.aws
 .DS_Store
 *.md
