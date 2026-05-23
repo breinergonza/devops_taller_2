@@ -19,15 +19,14 @@ services:
   app:
     build: .
     container_name: blacklist-app
-    # Cargo todas las variables de entorno (incluida NEW_RELIC_LICENSE_KEY)
-    # desde .env.local, que está fuera del control de versiones.
+    # Leo la licencia local desde .env.local.
     env_file:
       - .env.local
     environment:
       ENV_FILE: .env.local
       FLASK_APP: application.py
       FLASK_DEBUG: "1"
-      # Selecciono la sección [newrelic:development] del newrelic.ini.
+      # Uso la sección development del agente.
       NEW_RELIC_ENVIRONMENT: development
     ports:
       - "5002:5000"
@@ -37,12 +36,7 @@ services:
       db:
         condition: service_healthy
 
-  # ---------------------------------------------------------------------------
-  # Agente de infraestructura de New Relic corriendo en Docker.
-  # Lo uso para que en local también pueda ver métricas de host y de los
-  # contenedores (CPU, memoria, IO) en la UI de New Relic, antes de pasar
-  # al despliegue en Fargate.
-  # ---------------------------------------------------------------------------
+  # Agente local de infraestructura New Relic.
   newrelic-infra:
     image: newrelic/infrastructure:latest
     container_name: newrelic-infra
@@ -55,7 +49,7 @@ services:
       - /:/host:ro
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      # Reuso la misma license key del .env.local para no duplicarla.
+      # Reuso la licencia local.
       NRIA_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
       NRIA_DISPLAY_NAME: devops-taller-4-local
       NRIA_CUSTOM_ATTRIBUTES: '{"environment":"local","project":"devops_taller_4"}'

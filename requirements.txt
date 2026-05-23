@@ -13,8 +13,7 @@ flasgger==0.9.7.1
 gunicorn==21.2.0
 
 # --- Observabilidad ---
-# Agrego el agente APM de New Relic para instrumentar la app Flask.
-# Lo invoco vía 'newrelic-admin run-program gunicorn ...' en el Dockerfile.
+# Agente APM para Flask/Gunicorn.
 newrelic==9.13.0
 
 # --- CI / testing ---

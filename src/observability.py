@@ -5,12 +5,12 @@ from flask import current_app, request
 
 try:
     import newrelic.agent
-except Exception:  # pragma: no cover - solo lo uso como tolerancia operativa.
+except Exception:  # pragma: no cover - tolerancia local.
     newrelic = None
 
 
 def add_custom_attribute(name, value):
-    """Agrego un atributo custom sin romper la request si New Relic no esta activo."""
+    """Envio un atributo custom si el agente esta disponible."""
     if value is None or newrelic is None:
         return
 
