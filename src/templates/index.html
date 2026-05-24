@@ -6,6 +6,7 @@
 <title>Blacklist Core API · Operational Dashboard</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.49.1/dist/apexcharts.min.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -956,77 +957,99 @@ async function initDashboard() {
 initDashboard();
 
 /* ============== LOOP ============== */
-function loop() {
-  const d = derive();
+/* ============== WEB SOCKETS & LIVE DATA ============== */
+const socket = io({
+  transports: ['websocket', 'polling']
+});
 
-  $('#kpi-total').textContent = STATE.counters.total.toLocaleString();
-  $('#kpi-apdex').textContent = d.apdex.toFixed(2);
-  $('#kpi-err').innerHTML     = d.err.toFixed(1) + '<span class="text-base text-mute">%</span>';
-  $('#kpi-rps').textContent   = d.rpm;
+STATE.socketConnected = false;
 
-  $('#lat-p50').innerHTML = Math.round(d.p50)+'<span class="text-[11px] text-mute">ms</span>';
-  $('#lat-p95').innerHTML = Math.round(d.p95)+'<span class="text-[11px] text-mute">ms</span>';
-  $('#lat-p99').innerHTML = Math.round(d.p99)+'<span class="text-[11px] text-mute">ms</span>';
+socket.on('connect', () => {
+  console.log('Socket.io conectado. Cambiando a modo push en tiempo real.');
+  STATE.socketConnected = true;
+});
 
-  const apdexOk = d.apdex>=0.85, apdexWarn = d.apdex>=0.7 && !apdexOk, apdexBad = d.apdex<0.7;
+socket.on('disconnect', () => {
+  console.warn('Socket.io desconectado. Reabriendo HTTP polling de respaldo.');
+  STATE.socketConnected = false;
+});
+
+socket.on('metrics_update', (data) => {
+  if (data && data.stats && data.events) {
+    updateDashboardDOM(data.stats, data.events.events);
+  }
+});
+
+function updateDashboardDOM(stats, events) {
+  $('#kpi-total').textContent = stats.blacklisted.total.toLocaleString();
+  $('#kpi-apdex').textContent = stats.apdex.value.toFixed(2);
+  $('#kpi-err').innerHTML     = stats.error_rate.percent.toFixed(1) + '<span class="text-base text-mute">%</span>';
+  $('#kpi-rps').textContent   = Math.round(stats.throughput.req_per_min);
+
+  $('#lat-p50').innerHTML = Math.round(stats.latency.p50_ms)+'<span class="text-[11px] text-mute">ms</span>';
+  $('#lat-p95').innerHTML = Math.round(stats.latency.p95_ms)+'<span class="text-[11px] text-mute">ms</span>';
+  $('#lat-p99').innerHTML = Math.round(stats.latency.p99_ms)+'<span class="text-[11px] text-mute">ms</span>';
+
+  const apdexOk = stats.apdex.value>=0.85, apdexWarn = stats.apdex.value>=0.7 && !apdexOk, apdexBad = stats.apdex.value<0.7;
   $('#kpi-apdex').className = 'text-3xl font-semibold mono ' + (apdexBad?'c-bad':apdexWarn?'c-warn':'c-ok');
   $('#apdex-chip').innerHTML = `<span class="dot ${apdexBad?'bg-bad':apdexWarn?'bg-warn':'bg-ok'}"></span>${apdexBad?'frustrated':apdexWarn?'tolerating':'satisfied'}`;
   $('#gauge-state').innerHTML = $('#apdex-chip').innerHTML;
 
-  const errOk = d.err<2, errWarn=d.err>=2 && d.err<5, errBad=d.err>=5;
+  const errOk = stats.error_rate.percent<2, errWarn=stats.error_rate.percent>=2 && stats.error_rate.percent<5, errBad=stats.error_rate.percent>=5;
   $('#kpi-err').className = 'text-3xl font-semibold mono ' + (errBad?'c-bad':errWarn?'c-warn':'');
   $('#err-chip').innerHTML = `<span class="dot ${errBad?'bg-bad pulse':errWarn?'bg-warn':'bg-ok'}"></span>${errBad?'critical':errWarn?'elevated':'nominal'}`;
   $('#err-alert').innerHTML = $('#err-chip').innerHTML;
 
-  const dbVals = [['select',d.db_select,600],['insert',d.db_insert,800],['commit',d.db_commit,400],['pool',d.db_pool,60]];
+  const dbVals = [['select',stats.database.select_ms,600],['insert',stats.database.insert_ms,800],['commit',stats.database.update_ms,400],['pool',stats.database.delete_ms,60]];
   for (const [k,v,max] of dbVals) {
     const el=$('#db-'+k), bar=$('#db-'+k+'-bar'); if (!el) continue;
     el.textContent = Math.round(v)+' ms';
     bar.style.width = clamp(v/max*100,2,100)+'%';
     bar.className = 'h-1.5 rounded ' + (v>500?'bg-bad':v>250?'bg-warn':'bg-ok');
   }
-  const dbCrit = d.db_insert>500 || d.db_select>500;
-  $('#db-chip').innerHTML = `<span class="dot ${dbCrit?'bg-bad pulse':d.db_insert>250?'bg-warn':'bg-ok'}"></span>${dbCrit?'lock contention':d.db_insert>250?'elevated':'nominal'}`;
+  const dbCrit = stats.database.insert_ms>500 || stats.database.select_ms>500;
+  $('#db-chip').innerHTML = `<span class="dot ${dbCrit?'bg-bad pulse':stats.database.insert_ms>250?'bg-warn':'bg-ok'}"></span>${dbCrit?'lock contention':stats.database.insert_ms>250?'elevated':'nominal'}`;
 
-  const lt = Math.round(d.lookup_true);
+  const lt = stats.newrelic_source ? Math.round(40 + stats.error_rate.percent * 2) : 34;
   lookupChart.updateSeries([lt, 100-lt]);
   $('#lk-true').textContent  = lt+'%';
   $('#lk-false').textContent = (100-lt)+'%';
 
-  latSeries.p50.shift(); latSeries.p50.push(d.p50);
-  latSeries.p95.shift(); latSeries.p95.push(d.p95);
-  latSeries.p99.shift(); latSeries.p99.push(d.p99);
+  latSeries.p50.shift(); latSeries.p50.push(stats.latency.p50_ms);
+  latSeries.p95.shift(); latSeries.p95.push(stats.latency.p95_ms);
+  latSeries.p99.shift(); latSeries.p99.push(stats.latency.p99_ms);
   latencyChart.updateSeries([{name:'p50',data:[...latSeries.p50]},{name:'p95',data:[...latSeries.p95]},{name:'p99',data:[...latSeries.p99]}]);
 
-  apdexChart.updateSeries([Math.round(d.apdex*100)]);
+  apdexChart.updateSeries([Math.round(stats.apdex.value*100)]);
   const apdexColor = apdexBad?'#DC2626':apdexWarn?'#D97706':'#059669';
   apdexChart.updateOptions({ colors:[apdexColor], plotOptions:{ radialBar:{ dataLabels:{ value:{ color: apdexColor } } } } });
 
-  errSeries.shift(); errSeries.push(d.err);
+  errSeries.shift(); errSeries.push(stats.error_rate.percent);
   errChart.updateSeries([{name:'err %',data:[...errSeries]}]);
 
-  $('#ctr-200').textContent = STATE.counters.ok;
-  $('#ctr-401').textContent = STATE.counters.e401;
-  $('#cnt-401').textContent = STATE.counters.e401;
-  $('#cnt-5xx').textContent = Math.max(2, Math.round(d.err*0.3));
-  $('#cnt-notice').textContent = STATE.counters.trip + Math.max(0, Math.round(d.err));
+  $('#ctr-200').textContent = stats.blacklisted.total;
+  $('#ctr-401').textContent = stats.error_rate.errors_401;
+  $('#cnt-401').textContent = stats.error_rate.errors_401;
+  $('#cnt-5xx').textContent = stats.error_rate.errors_5xx;
+  $('#cnt-notice').textContent = stats.error_rate.notice_errors;
 
-  const cpu1 = Math.round(15 + d.stress*70 + rand(-3,3));
-  const cpu2 = Math.round(5 + d.stress*25 + rand(-2,2));
+  const stress = clamp(stats.throughput.req_per_min / 500.0, 0, 1);
+  const cpu1 = Math.round(15 + stress*70 + rand(-3,3));
+  const cpu2 = Math.round(5 + stress*25 + rand(-2,2));
   $('#task1-cpu').textContent = cpu1+'%';
   $('#task2-cpu').textContent = cpu2+'%';
-  $('#task1-mem').textContent = Math.round(380 + d.stress*340)+' MB';
-  $('#task2-mem').textContent = Math.round(110 + d.stress*70)+' MB';
-  $('#task2-evt').textContent = Math.round(30 + d.stress*120);
+  $('#task1-mem').textContent = Math.round(380 + stress*340)+' MB';
+  $('#task2-mem').textContent = Math.round(110 + stress*70)+' MB';
+  $('#task2-evt').textContent = Math.round(30 + stress*120);
 
-  $('#db-pool-info').textContent = Math.round(6 + d.stress*14)+' / 20 conns';
+  $('#db-pool-info').textContent = Math.round(6 + stress*14)+' / 20 conns';
 
   const alerts = {
-    apdex:   d.apdex<0.8,
-    error:   d.err>5,
-    db:      (d.db_insert>500 || d.db_select>500),
-    latency: d.p99>1000,
-    auth:    !STATE.authValid || STATE.counters.trip>0,
+    apdex:   stats.apdex.value<0.8,
+    error:   stats.error_rate.percent>5,
+    db:      (stats.database.insert_ms>500 || stats.database.select_ms>500),
+    latency: stats.latency.p99_ms>1000,
+    auth:    stats.error_rate.errors_401>5,
   };
   for (const key of Object.keys(alerts)) {
     const el = document.querySelector(`[data-alert="${key}"]`);
@@ -1047,13 +1070,36 @@ function loop() {
     }
   }
 
-  if (!STATE.paused) {
-    const stress = clamp((STATE.vus-25)/275, 0, 1);
-    const n = 1 + Math.round(stress*3);
-    for (let i=0;i<n;i++) pushEvent();
+  // Update events stream
+  if (events && events.length > 0) {
+    STREAM_EL.innerHTML = '';
+    events.forEach(e => {
+      const row = document.createElement('div');
+      row.className = 'stream-row flex items-center gap-3';
+      const method = e.method.split(' ')[0];
+      const color = method === 'POST' ? '#059669' : '#0284C7';
+      row.innerHTML = `
+        <span class="text-mute w-[58px] shrink-0">${e.timestamp.split('T')[1].slice(0,8)}</span>
+        <span class="shrink-0 inline-flex items-center gap-1 w-[54px]"><span class="dot" style="background:${color}"></span><span style="color:${color}">${method}</span></span>
+        <span class="text-body truncate">${e.email} | ${e.reason} | ${e.app_uuid}</span>`;
+      STREAM_EL.appendChild(row);
+    });
   }
 }
-loop(); setInterval(loop, 1500);
+
+/* ============== BACKUP POLLING LOOP ============== */
+async function loop() {
+  if (STATE.socketConnected) return; // Saltarse si el socket está activo
+  
+  const stats = await fetchDashboardData();
+  if (!stats) return;
+  
+  const eventsData = await fetchDashboardEvents();
+  const events = eventsData ? eventsData.events : [];
+  
+  updateDashboardDOM(stats, events);
+}
+loop(); setInterval(loop, 4000);
 
 /* ============== TABS ============== */
 $$('#tabbar button').forEach(b => b.addEventListener('click', e => {

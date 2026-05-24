@@ -27,9 +27,38 @@ env_path = Path(__file__).parent.parent / env_file
 if env_path.exists():
     load_dotenv(env_path)
 
+from flask_socketio import SocketIO
+from threading import Lock
+
 # Instancias globales (se inicializan dentro de create_app)
 db = SQLAlchemy()
 jwt = JWTManager()
+socketio = SocketIO(cors_allowed_origins="*")
+
+thread = None
+thread_lock = Lock()
+
+
+def background_thread_emitter(app):
+    """Bucle de segundo plano que emite métricas en tiempo real a los clientes conectados."""
+    with app.app_context():
+        from src.views.dashboard_view import DashboardStatsResource, DashboardEventsResource
+        stats_resource = DashboardStatsResource()
+        events_resource = DashboardEventsResource()
+        
+        while True:
+            try:
+                stats_data, stats_code = stats_resource.get()
+                events_data, events_code = events_resource.get()
+                
+                if stats_code == 200 and events_code == 200:
+                    socketio.emit('metrics_update', {
+                        'stats': stats_data,
+                        'events': events_data
+                    })
+            except Exception:
+                pass
+            socketio.sleep(3.0)
 
 
 def create_app(test_config=None):
@@ -63,6 +92,14 @@ def create_app(test_config=None):
 
     db.init_app(app)
     jwt.init_app(app)
+    socketio.init_app(app)
+
+    @socketio.on('connect')
+    def handle_connect():
+        global thread
+        with thread_lock:
+            if thread is None:
+                thread = socketio.start_background_task(background_thread_emitter, app)
 
     # Inicializar Swagger/Flasgger
     swagger_config = {

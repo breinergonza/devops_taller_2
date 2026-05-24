@@ -20,3 +20,7 @@ requests==2.31.0
 # --- CI / testing ---
 pytest==7.4.4
 pytest-cov==4.1.0
+
+# --- Sockets ---
+flask-socketio==5.6.1
+simple-websocket==1.1.0
