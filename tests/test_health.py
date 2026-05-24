@@ -10,7 +10,7 @@ def test_health_check_returns_200(client):
 
 
 def test_index_returns_metadata(client):
-    resp = client.get("/")
+    resp = client.get("/api/info")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["service"] == "blacklist-microservice"
