@@ -439,6 +439,80 @@ graph TD
     class ProdSidecar fargate;
 ```
 
+---
+
+## Alertas Automáticas y Monitoreo (New Relic)
+
+### Características de Monitoreo en Código
+
+Para ir más allá de la instrumentación básica y enriquecer el análisis operativo y de seguridad del microservicio, se han implementado las siguientes características en el código fuente de Flask:
+
+1. **Eventos Personalizados (`record_custom_event`)**:
+   * Cada vez que se agrega un correo a la lista negra (`POST /blacklists`), se registra un evento `BlacklistEvent` con la acción `blacklist_addition`, registrando de forma anonimizada el dominio del correo (`email_domain`), el UUID de la aplicación (`app_uuid`) y la IP de origen del cliente (`request_ip`).
+   * Cada vez que se consulta la lista negra (`GET /blacklists/<email>`), se registra un evento `BlacklistEvent` con la acción `blacklist_lookup`, reportando si el correo estaba bloqueado (`in_blacklist`) y el dominio consultado (`email_domain`).
+   * *Caso de uso*: Permite construir tableros personalizados con NRQL (ej. `SELECT count(*) FROM BlacklistEvent FACET email_domain`).
+
+2. **Registro de Incidentes de Seguridad (`notice_error`)**:
+   * Si una petición no está autorizada (`401 Unauthorized`), se registra una alerta de error explícita en New Relic mediante `notice_error()`.
+   * El error se reporta con metadatos de contexto (IP origen y un fragmento seguro de la cabecera) para priorización en el **New Relic Errors Inbox**.
+
+3. **Trazabilidad HTTP Global (`after_request`)**:
+   * Se configuró un callback global `app.after_request` para capturar el código de estado HTTP (`response_status`), el tipo de contenido y la longitud del contenido de todas las respuestas enviadas por la API.
+
+---
+
+### Configuración y Automatización de Alertas (NerdGraph API)
+
+Para implementar de forma automatizada las alertas de monitoreo, se ha creado un script en la carpeta de scripts:
+
+* **Script de automatización**: [scripts/setup_newrelic_alerts.py](scripts/setup_newrelic_alerts.py)
+
+Este script interactúa con la API GraphQL de New Relic (**NerdGraph**) para crear la política de alertas `devops-taller-4-alerts` y configurar las siguientes **5 condiciones de alerta NRQL estáticas**:
+
+1. **Tasa de Errores Crítica (`High Error Rate (> 5%)`)**:
+   * *NRQL*: `SELECT percentage(count(*), WHERE error IS true) FROM Transaction WHERE appName = 'devops-taller-4-flask (production)'`
+   * *Regla*: Alerta si la tasa de error del microservicio supera el **5%** durante **5 minutos**.
+2. **Degradación de Apdex (`Low Apdex Satisfaction (< 0.8)`)**:
+   * *NRQL*: `SELECT apdex(duration, t: 0.5) FROM Transaction WHERE appName = 'devops-taller-4-flask (production)'`
+   * *Regla*: Alerta si la satisfacción del usuario (Apdex con T=0.5s) cae por debajo de **0.8** por **5 minutos**.
+3. **Latencia Web Excesiva p95 (`Slow Response Time p95 (> 1s)`)**:
+   * *NRQL*: `SELECT percentile(duration, 95) FROM Transaction WHERE appName = 'devops-taller-4-flask (production)'`
+   * *Regla*: Alerta si el percentil 95 del tiempo de respuesta supera **1.0 segundo** durante **5 minutos**.
+4. **Degradación de Base de Datos p95 (`Slow Database Queries p95 (> 500ms)`)**:
+   * *NRQL*: `SELECT percentile(databaseDuration, 95) FROM Transaction WHERE appName = 'devops-taller-4-flask (production)'`
+   * *Regla*: Alerta si las consultas a la base de datos PostgreSQL en el p95 superan **500 ms** por **5 minutos**.
+5. **Servicio o Contenedor Caído (`Container or Service Down`)**:
+   * *NRQL*: `SELECT count(*) FROM Transaction WHERE appName = 'devops-taller-4-flask (production)'`
+   * *Regla*: Alerta si el conteo de transacciones cae por debajo de **1** durante **5 minutos** (Loss of Signal / servicio caído).
+
+### Integración en el Pipeline CI/CD (Automatización Completa)
+
+El script de alertas está integrado para ejecutarse de forma **totalmente automatizada** en el pipeline de AWS CodePipeline / CodeBuild durante el proceso de compilación y despliegue:
+
+* **SSM Parameter Store**: El archivo `buildspec.yml` lee de forma segura las credenciales necesarias desde AWS Systems Manager (SSM) Parameter Store:
+  * `NEW_RELIC_API_KEY` desde `/taller4/NEW_RELIC_API_KEY`
+  * `NEW_RELIC_ACCOUNT_ID` desde `/taller4/NEW_RELIC_ACCOUNT_ID`
+* **Ejecución Automática**: Se invoca automáticamente al finalizar la fase `post_build` de `buildspec.yml` tras la carga exitosa de la imagen Docker en ECR:
+  ```bash
+  python scripts/setup_newrelic_alerts.py
+  ```
+
+Esto garantiza que las 5 condiciones de alerta se sincronicen y aprovisionen en la nube de New Relic de forma transparente en cada ejecución del pipeline de entrega continua.
+
+### Ejecución Manual (Opcional)
+
+Si requieres aprovisionar las alertas manualmente en tu cuenta de New Relic, ejecuta el siguiente comando:
+
+```bash
+NEW_RELIC_API_KEY="NRAK-XXXXXXXXXXXXXXXXXXXXXXXX" \
+NEW_RELIC_ACCOUNT_ID="4402839" \
+NEW_RELIC_REGION="US" \
+NEW_RELIC_APP_NAME="devops-taller-4-flask (production)" \
+python3 scripts/setup_newrelic_alerts.py
+```
+
+
+
 
 
 

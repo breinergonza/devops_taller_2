@@ -6,10 +6,14 @@ env:
     AWS_DEFAULT_REGION: "us-east-1"
     IMAGE_REPO_NAME: "blacklist-service"
     CONTAINER_NAME: "blacklist-container"
+    NEW_RELIC_REGION: "US"
+    NEW_RELIC_APP_NAME: "devops-taller-4-flask (production)"
   parameter-store:
     DATABASE_URI: /taller2/database-uri
     JWT_SECRET_KEY: /taller2/jwt-secret-key
     STATIC_BEARER: /taller2/static-bearer
+    NEW_RELIC_API_KEY: /taller4/NEW_RELIC_API_KEY
+    NEW_RELIC_ACCOUNT_ID: /taller4/NEW_RELIC_ACCOUNT_ID
 
 phases:
   install:
@@ -48,6 +52,8 @@ phases:
       - echo "===> creating imageDetail.json for CodeDeployToECS"
       - printf '{"ImageURI":"%s"}' $REPOSITORY_URI:$IMAGE_TAG > imageDetail.json
       - cat imageDetail.json
+      - echo "===> Configuring New Relic Alerts programmatically"
+      - python scripts/setup_newrelic_alerts.py
 
 reports:
   pytest_reports:

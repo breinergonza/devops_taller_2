@@ -13,8 +13,9 @@ flasgger==0.9.7.1
 gunicorn==21.2.0
 
 # --- Observabilidad ---
-# Agente APM para Flask/Gunicorn.
+# Agente APM para Flask/Gunicorn y script de alertas.
 newrelic==9.13.0
+requests==2.31.0
 
 # --- CI / testing ---
 pytest==7.4.4
