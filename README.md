@@ -118,7 +118,7 @@ La aplicación queda instrumentada con el agente Python de New Relic y se ejecut
 
 ### Variables locales
 
-En local uso `.env.local` para cargar la licencia y las variables de New Relic. Ese archivo no debe versionarse.
+En local utilizo `.env.local` para cargar la licencia y las variables de New Relic. No he versionado este archivo para mantenerlo seguro.
 
 Variables esperadas:
 
@@ -134,7 +134,7 @@ NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
 
 ### Variables en AWS Fargate
 
-En AWS no guardo la licencia en archivos ni en la imagen Docker. La tarea de ECS la recibe desde AWS Systems Manager Parameter Store:
+En AWS no guardo la licencia en archivos ni en la imagen Docker. Configuré la tarea de ECS para recibirla desde AWS Systems Manager Parameter Store:
 
 ```text
 /taller4/NEW_RELIC_LICENSE_KEY
@@ -166,7 +166,7 @@ Con k6:
 BASE_URL=http://localhost:5002 TOKEN=uniandes-devops-2026 k6 run scripts/stress_test.js
 ```
 
-Para Fargate, cambiar `BASE_URL` por el DNS del ALB. Yo uso esta ejecución para capturar evidencias de tiempo de respuesta, DB, Apdex, errores y alertas.
+Para Fargate, cambio `BASE_URL` por el DNS de mi ALB. Utilizo esta ejecución para capturar mis evidencias de tiempo de respuesta, DB, Apdex, errores y alertas.
 
 ### Error controlado para sustentación
 
@@ -264,7 +264,7 @@ graph TD
         CD["AWS CodeDeploy - blacklist-dg"]
         ECR[("Amazon ECR - blacklist-service")]
     end
-
+ 
     subgraph "Parámetros y Secretos (AWS)"
         SSM["AWS Systems Manager Parameter Store"]
         DB_URI["/taller2/database-uri"]
@@ -272,7 +272,7 @@ graph TD
         BEARER["/taller2/static-bearer"]
         NR_KEY["/taller4/NEW_RELIC_LICENSE_KEY"]
     end
-
+ 
     subgraph "Infraestructura de Red (AWS VPC)"
         ALB["Application Load Balancer - blacklist-alb"]
         Port80["Puerto 80 - Producción"]
@@ -290,11 +290,11 @@ graph TD
             end
         end
     end
-
+ 
     subgraph "Monitoreo y Diagnóstico"
         CW["AWS CloudWatch Logs - /ecs/blacklist-service"]
     end
-
+ 
     %% Relaciones de flujo
     Github -->|Push / Webhook| CP
     CP -->|Orquesta| CB
@@ -326,7 +326,7 @@ graph TD
     
     %% Logs
     AppContainer & Sidecar -->|Streaming de Logs| CW
-
+ 
     class CP,CB,CD,ECR,ALB,TG_Blue,TG_Green,AppContainer,Sidecar,CW aws;
     class Github git;
     class SSM,DB_URI,JWT,BEARER,NR_KEY ssm;
@@ -343,7 +343,7 @@ graph TD
     classDef subnet fill:#E0F2F1,stroke:#00796B,stroke-width:2px;
     classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:white;
     classDef db fill:#336791,stroke:#20405B,stroke-width:2px,color:white;
-
+ 
     subgraph AWS_Cloud["AWS Cloud - us-east-1"]
         subgraph VPC["AWS VPC - vpc-0af5df0c0c5347b86"]
             
@@ -351,36 +351,36 @@ graph TD
                 ALB_1A["ALB Node - Port 80 / 8080"]
                 Task_1A["ECS Task - blacklist-service-task:12"]
             end
-
+ 
             subgraph Subnet_1B["Subred Pública us-east-1b - subnet-00d1c7d418125f884"]
                 ALB_1B["ALB Node - Port 80 / 8080"]
                 Task_1B["ECS Task - Obsoleto / Draining"]
             end
-
+ 
             ALB["Application Load Balancer - blacklist-alb"]
             ALB -.-> ALB_1A
             ALB -.-> ALB_1B
-
+ 
             subgraph Security_Group["Security Group - sg-0a1a4e3d2d2be5e59"]
                 ALB_1A & ALB_1B -->|"HTTP Port 5000"| Task_1A
             end
-
+ 
             subgraph RDS_Subnets["Capa de Base de Datos"]
                 RDS["AWS RDS PostgreSQL - taller-1-api-db - Port 5432"]
             end
-
+ 
             Task_1A -->|"Lectura / Escritura PostgreSQL"| RDS
         end
-
+ 
         SSM["AWS SSM Parameter Store"]
         CW["Amazon CloudWatch Logs"]
-
+ 
         SSM -.->|"Inyección en Boot"| Task_1A
         Task_1A -->|"Streaming de Logs"| CW
     end
-
+ 
     Internet["Usuarios / Clientes"] -->|"Puerto 80 / 8080"| ALB
-
+ 
     class ALB,Task_1A,Task_1B,CW aws;
     class RDS db;
     class VPC vpc;
@@ -389,7 +389,7 @@ graph TD
 
 ### 3. Arquitectura de Monitoreo con New Relic
 
-El siguiente diagrama presenta cómo se integra New Relic en el microservicio tanto a nivel de agente APM (para trazas, transacciones de Flask y logs enriquecidos del servidor de aplicación) como a nivel de infraestructura Fargate (mediante la recolección activa de métricas del sidecar `nri-ecs`), cubriendo tanto el entorno local como el productivo en la nube.
+El siguiente diagrama presenta cómo he integrado New Relic en mi microservicio tanto a nivel de agente APM (para trazas, transacciones de Flask y logs enriquecidos del servidor de aplicación) como a nivel de infraestructura Fargate (mediante la recolección activa de métricas del sidecar `nri-ecs`), cubriendo tanto mi entorno local como el productivo en la nube.
 
 ```mermaid
 graph TD
@@ -397,26 +397,26 @@ graph TD
     classDef nr fill:#008C99,stroke:#005C66,stroke-width:2px,color:white;
     classDef local fill:#ECEFF1,stroke:#455A64,stroke-width:2px;
     classDef fargate fill:#FFE0B2,stroke:#E65100,stroke-width:2px;
-
+ 
     subgraph "Entorno Local (Docker Compose)"
         LocalApp["Flask App Container"] -->|"newrelic-admin APM Agent"| NR_APM_Dev["New Relic APM - devops-taller-4-flask-development"]
         LocalInfra["newrelic-infra Container"] -->|"Docker Socket & Host Mounts"| NR_Infra_Dev["New Relic Infrastructure - devops-taller-4-local"]
     end
-
+ 
     subgraph "Entorno Producción (AWS ECS Fargate)"
         subgraph "Fargate Task (blacklist-service-task)"
             ProdApp["Flask App Container"]
             ProdSidecar["newrelic-infra Sidecar - nri-ecs"]
         end
     end
-
+ 
     subgraph "New Relic Cloud Platform"
         APM["New Relic APM - devops-taller-4-flask production - Traces, APDEX, Transactions"]
         Infra["New Relic Infrastructure - Host & Container CPU/Mem - NRI-ECS integration"]
         Logs["New Relic Logs - Gunicorn stdout - App Logs Forwarding"]
         Errors["New Relic Errors Inbox - Controlled error testing - Alerting"]
     end
-
+ 
     %% Flujos de Telemetría APM
     ProdApp -->|"1. APM Python Agent Wrapper (add_custom_attribute, Obfuscated SQL, APDEX)"| APM
     
@@ -428,11 +428,11 @@ graph TD
     
     %% Errors Inbox
     ProdApp -.->|"4. Error ingestion (/debug/newrelic-error)"| Errors
-
+ 
     %% Relaciones locales y mapeo global
     NR_APM_Dev -.->|"Métricas Desarrollo"| APM
     NR_Infra_Dev -.->|"Métricas Desarrollo"| Infra
-
+ 
     class ProdApp,LocalApp app;
     class APM,Infra,Logs,Errors nr;
     class LocalInfra,NR_APM_Dev,NR_Infra_Dev local;
@@ -445,63 +445,63 @@ graph TD
 
 ### Características de Monitoreo en Código
 
-Para ir más allá de la instrumentación básica y enriquecer el análisis operativo y de seguridad del microservicio, se han implementado las siguientes características en el código fuente de Flask:
+Para ir más allá de la instrumentación básica y enriquecer el análisis operativo y de seguridad del microservicio, he implementado las siguientes características en mi código fuente de Flask:
 
 1. **Eventos Personalizados (`record_custom_event`)**:
-   * Cada vez que se agrega un correo a la lista negra (`POST /blacklists`), se registra un evento `BlacklistEvent` con la acción `blacklist_addition`, registrando de forma anonimizada el dominio del correo (`email_domain`), el UUID de la aplicación (`app_uuid`) y la IP de origen del cliente (`request_ip`).
-   * Cada vez que se consulta la lista negra (`GET /blacklists/<email>`), se registra un evento `BlacklistEvent` con la acción `blacklist_lookup`, reportando si el correo estaba bloqueado (`in_blacklist`) y el dominio consultado (`email_domain`).
-   * *Caso de uso*: Permite construir tableros personalizados con NRQL (ej. `SELECT count(*) FROM BlacklistEvent FACET email_domain`).
+   * Cada vez que agrego un correo a la lista negra (`POST /blacklists`), registro un evento `BlacklistEvent` con la acción `blacklist_addition`, guardando de forma anonimizada el dominio del correo (`email_domain`), el UUID de la aplicación (`app_uuid`) y la IP de origen del cliente (`request_ip`).
+   * Cada vez que consulto la lista negra (`GET /blacklists/<email>`), registro un evento `BlacklistEvent` con la acción `blacklist_lookup`, reportando si el correo estaba bloqueado (`in_blacklist`) y el dominio consultado (`email_domain`).
+   * *Caso de uso*: Esto me permite construir tableros personalizados con NRQL (ej. `SELECT count(*) FROM BlacklistEvent FACET email_domain`).
 
 2. **Registro de Incidentes de Seguridad (`notice_error`)**:
-   * Si una petición no está autorizada (`401 Unauthorized`), se registra una alerta de error explícita en New Relic mediante `notice_error()`.
-   * El error se reporta con metadatos de contexto (IP origen y un fragmento seguro de la cabecera) para priorización en el **New Relic Errors Inbox**.
+   * Si recibo una petición no autorizada (`401 Unauthorized`), registro un error explícito en New Relic mediante `notice_error()`.
+   * Reporto el error con metadatos de contexto (IP origen y un fragmento seguro de la cabecera) para priorizarlo en mi **New Relic Errors Inbox**.
 
 3. **Trazabilidad HTTP Global (`after_request`)**:
-   * Se configuró un callback global `app.after_request` para capturar el código de estado HTTP (`response_status`), el tipo de contenido y la longitud del contenido de todas las respuestas enviadas por la API.
+   * He configurado un callback global `app.after_request` para capturar el código de estado HTTP (`response_status`), el tipo de contenido y la longitud de contenido de todas las respuestas que envía mi API.
 
 ---
 
 ### Configuración y Automatización de Alertas (NerdGraph API)
 
-Para implementar de forma automatizada las alertas de monitoreo, se ha creado un script en la carpeta de scripts:
+Para implementar de forma automatizada mis alertas de monitoreo, he creado un script en mi carpeta de scripts:
 
 * **Script de automatización**: [scripts/setup_newrelic_alerts.py](scripts/setup_newrelic_alerts.py)
 
-Este script interactúa con la API GraphQL de New Relic (**NerdGraph**) para crear la política de alertas `devops-taller-4-alerts` y configurar las siguientes **5 condiciones de alerta NRQL estáticas**:
+Mi script interactúa con la API GraphQL de New Relic (**NerdGraph**) para crear la política de alertas `devops-taller-4-alerts` y configurar mis **5 condiciones de alerta NRQL estáticas**:
 
 1. **Tasa de Errores Crítica (`High Error Rate (> 5%)`)**:
    * *NRQL*: `SELECT percentage(count(*), WHERE error IS true) FROM Transaction WHERE appName = 'devops-taller-4-flask (production)'`
-   * *Regla*: Alerta si la tasa de error del microservicio supera el **5%** durante **5 minutos**.
+   * *Regla*: Me alerta si la tasa de error de mi microservicio supera el **5%** durante **5 minutos**.
 2. **Degradación de Apdex (`Low Apdex Satisfaction (< 0.8)`)**:
    * *NRQL*: `SELECT apdex(duration, t: 0.5) FROM Transaction WHERE appName = 'devops-taller-4-flask (production)'`
-   * *Regla*: Alerta si la satisfacción del usuario (Apdex con T=0.5s) cae por debajo de **0.8** por **5 minutos**.
+   * *Regla*: Me alerta si la satisfacción del usuario (Apdex con T=0.5s) cae por debajo de **0.8** por **5 minutos**.
 3. **Latencia Web Excesiva p95 (`Slow Response Time p95 (> 1s)`)**:
    * *NRQL*: `SELECT percentile(duration, 95) FROM Transaction WHERE appName = 'devops-taller-4-flask (production)'`
-   * *Regla*: Alerta si el percentil 95 del tiempo de respuesta supera **1.0 segundo** durante **5 minutos**.
+   * *Regla*: Me alerta si el percentil 95 del tiempo de respuesta supera **1.0 segundo** durante **5 minutos**.
 4. **Degradación de Base de Datos p95 (`Slow Database Queries p95 (> 500ms)`)**:
    * *NRQL*: `SELECT percentile(databaseDuration, 95) FROM Transaction WHERE appName = 'devops-taller-4-flask (production)'`
-   * *Regla*: Alerta si las consultas a la base de datos PostgreSQL en el p95 superan **500 ms** por **5 minutos**.
+   * *Regla*: Me alerta si las consultas a mi base de datos PostgreSQL en el p95 superan **500 ms** por **5 minutos**.
 5. **Servicio o Contenedor Caído (`Container or Service Down`)**:
    * *NRQL*: `SELECT count(*) FROM Transaction WHERE appName = 'devops-taller-4-flask (production)'`
-   * *Regla*: Alerta si el conteo de transacciones cae por debajo de **1** durante **5 minutos** (Loss of Signal / servicio caído).
+   * *Regla*: Me alerta si el conteo de transacciones cae por debajo de **1** durante **5 minutos** (Loss of Signal / servicio caído).
 
 ### Integración en el Pipeline CI/CD (Automatización Completa)
 
-El script de alertas está integrado para ejecutarse de forma **totalmente automatizada** en el pipeline de AWS CodePipeline / CodeBuild durante el proceso de compilación y despliegue:
+He integrado mi script de alertas para ejecutarse de forma **totalmente automatizada** en mi pipeline de AWS CodePipeline / CodeBuild durante el proceso de compilación y despliegue:
 
-* **SSM Parameter Store**: El archivo `buildspec.yml` lee de forma segura las credenciales necesarias desde AWS Systems Manager (SSM) Parameter Store:
+* **SSM Parameter Store**: Mi archivo `buildspec.yml` lee de forma segura las credenciales necesarias desde AWS Systems Manager (SSM) Parameter Store:
   * `NEW_RELIC_API_KEY` desde `/taller4/NEW_RELIC_API_KEY`
   * `NEW_RELIC_ACCOUNT_ID` desde `/taller4/NEW_RELIC_ACCOUNT_ID`
-* **Ejecución Automática**: Se invoca automáticamente al finalizar la fase `post_build` de `buildspec.yml` tras la carga exitosa de la imagen Docker en ECR:
+* **Ejecución Automática**: Lo invoco automáticamente al finalizar la fase `post_build` de mi `buildspec.yml` tras la carga exitosa de mi imagen Docker en ECR:
   ```bash
   python scripts/setup_newrelic_alerts.py
   ```
 
-Esto garantiza que las 5 condiciones de alerta se sincronicen y aprovisionen en la nube de New Relic de forma transparente en cada ejecución del pipeline de entrega continua.
+Esto me garantiza que las 5 condiciones de alerta se sincronicen y aprovisionen en la nube de New Relic de forma transparente en cada ejecución de mi pipeline de entrega continua.
 
 ### Ejecución Manual (Opcional)
 
-Si requieres aprovisionar las alertas manualmente en tu cuenta de New Relic, ejecuta el siguiente comando:
+Si requieres aprovisionar las alertas manualmente en mi cuenta de New Relic, puedes ejecutar el siguiente comando:
 
 ```bash
 NEW_RELIC_API_KEY="NRAK-XXXXXXXXXXXXXXXXXXXXXXXX" \
@@ -510,9 +510,3 @@ NEW_RELIC_REGION="US" \
 NEW_RELIC_APP_NAME="devops-taller-4-flask (production)" \
 python3 scripts/setup_newrelic_alerts.py
 ```
-
-
-
-
-
-
