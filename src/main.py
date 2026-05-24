@@ -233,6 +233,54 @@ def create_app(test_config=None):
         def debug_newrelic_error():
             raise RuntimeError("Error controlado para validar New Relic Errors Inbox")
 
+    # Endpoint para poblar la base de datos con datos de ejemplo (solo local)
+    if app.config["ENVIRONMENT"] == "local":
+        @app.route("/debug/seed-dashboard", methods=["POST"])
+        def seed_dashboard():
+            """Popula la base de datos con datos de ejemplo para el dashboard."""
+            from datetime import datetime, timedelta
+            from src.models.blacklist import Blacklist
+
+            try:
+                # Borrar datos existentes
+                Blacklist.query.delete()
+                db.session.commit()
+
+                # Datos de ejemplo
+                domains = ['gmail.com', 'outlook.com', 'yahoo.com', 'example.com', 'spam.com']
+                names = ['spam', 'phishing', 'malware', 'botnet', 'scam', 'fraud', 'abuse']
+                reasons = ['phishing', 'spam', 'malware', 'botnet', 'fraud', 'abuse']
+
+                # Crear registros de ejemplo
+                now = datetime.utcnow()
+                entries = []
+
+                for i in range(50):
+                    hours_ago = (i % 24)
+                    email = f"{names[i % len(names)]}{i}@{domains[i % len(domains)]}"
+                    reason = reasons[i % len(reasons)]
+                    timestamp = now - timedelta(hours=hours_ago, minutes=(i % 60))
+
+                    entry = Blacklist(
+                        email=email,
+                        app_uuid=f"app-{i:04d}-uuid-{i:04d}",
+                        blocked_reason=reason,
+                        created_at=timestamp,
+                        request_ip=f"192.168.{i % 256}.{(i * 7) % 256}"
+                    )
+                    entries.append(entry)
+
+                db.session.bulk_save_objects(entries)
+                db.session.commit()
+
+                return jsonify({
+                    "status": "success",
+                    "message": f"Base de datos poblada con {len(entries)} registros",
+                    "total": Blacklist.query.count()
+                }), 200
+            except Exception as e:
+                return jsonify({"status": "error", "message": str(e)}), 500
+
     # Inicializar las tablas
     with app.app_context():
         from src.models.blacklist import Blacklist  # noqa: F401
