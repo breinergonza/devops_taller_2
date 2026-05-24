@@ -112,18 +112,35 @@ graph TD
    docker-compose down
    ```
 
-## Monitoreo continuo con New Relic
+## Monitoreo continuo con New Relic (Entrega 4)
 
-La aplicación queda instrumentada con el agente Python de New Relic y se ejecuta con Gunicorn mediante `newrelic-admin run-program`, que es la forma recomendada para que el agente se inicialice antes de los workers.
+He instrumentado la aplicación con el agente Python de New Relic (v9.13.0) siguiendo las mejores prácticas. El agente se ejecuta mediante `newrelic-admin run-program gunicorn`, que es el patrón oficial recomendado por New Relic para que el agente se inicialice antes del fork de los workers de gunicorn, garantizando la captura de todas las transacciones.
 
-### Variables locales
+### Arquitectura de Monitoreo
 
-En local utilizo `.env.local` para cargar la licencia y las variables de New Relic. No he versionado este archivo para mantenerlo seguro.
+```
+┌─────────────────────────────────────────────────────────────┐
+│ docker-compose (local)                                      │
+│                                                             │
+│ ┌──────────┐   ┌────────────────────┐   ┌─────────────┐   │
+│ │    db    │◄──│ app (Flask +       │   │ newrelic    │   │
+│ │postgres  │   │ newrelic APM)      │──►│ -infra      │───┼──► New Relic
+│ └──────────┘   └────────────────────┘   │ (infra)     │   │
+│                                         └─────────────┘   │
+└─────────────────────────────────────────────────────────────┘
 
-Variables esperadas:
+AWS Fargate (cloud)
+  Task: app + sidecar newrelic-infra con license key desde SSM.
+```
+
+### Variables de entorno
+
+#### Local (.env.local — NO versionado)
+
+Las variables locales las cargo desde `.env.local` (ignorado por git):
 
 ```bash
-NEW_RELIC_LICENSE_KEY=<ingest_license_key>
+NEW_RELIC_LICENSE_KEY=<tu_ingest_license_key>
 NEW_RELIC_APP_NAME=devops-taller-4-flask
 NEW_RELIC_ENVIRONMENT=development
 NEW_RELIC_CONFIG_FILE=/app/newrelic.ini
@@ -132,51 +149,85 @@ NEW_RELIC_LOG_LEVEL=info
 NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
 ```
 
-### Variables en AWS Fargate
+#### AWS Fargate (Parameter Store)
 
-En AWS no guardo la licencia en archivos ni en la imagen Docker. Configuré la tarea de ECS para recibirla desde AWS Systems Manager Parameter Store:
+En AWS no guardo credenciales en imágenes Docker. El `task-def.json` inyecta la licencia desde SSM Parameter Store:
 
 ```text
-/taller4/NEW_RELIC_LICENSE_KEY
+Secret: /taller4/NEW_RELIC_LICENSE_KEY (SecureString)
 ```
 
-El archivo `task-def.json` inyecta ese parámetro como `NEW_RELIC_LICENSE_KEY` en el contenedor de la aplicación y como `NRIA_LICENSE_KEY` en el sidecar `newrelic-infra`.
+El `task-def.json` incluye:
+- **Contenedor principal:** env variables + secret `NEW_RELIC_LICENSE_KEY`
+- **Sidecar newrelic-infra:** secret `NRIA_LICENSE_KEY` para métricas de infraestructura en Fargate
 
-### Validación rápida
+### Validación local (Fase 3)
 
-1. Levantar localmente:
+1. **Levantar los servicios:**
    ```bash
    docker compose up --build
    ```
-2. Generar tráfico:
+
+2. **Generar tráfico inicial:**
    ```bash
+   # Loop simple para /ping
    for i in $(seq 1 50); do curl -s http://localhost:5002/ping; done
+   
+   # O generar más carga realista
+   curl -X POST http://localhost:5002/blacklists \
+     -H "Authorization: Bearer uniandes-devops-2026" \
+     -H "Content-Type: application/json" \
+     -d '{"email":"test@example.com","app_uuid":"11111111-1111-1111-1111-111111111111","blocked_reason":"test"}'
    ```
-3. Revisar el endpoint seguro de configuración:
-   ```bash
-   curl http://localhost:5002/observability/newrelic
-   ```
-4. Verificar en New Relic APM la aplicación `devops-taller-4-flask (development)`.
 
-### Pruebas de stress
+3. **Verificar en New Relic UI:**
+   - Ve a **APM & Services** en New Relic One.
+   - Deberías ver `devops-taller-4-flask (development)` con transacciones en **<3 minutos**.
+   - En **Infrastructure > Hosts** aparece `devops-taller-4-local`.
+   - En **Infrastructure > Containers** ves `blacklist-app` y `blacklist-db`.
 
-Con k6:
+### Pruebas de stress para análisis de capacidades (Fase 5)
 
+Uso **k6** para generar carga y capturar evidencia de:
+- Tiempo de respuesta (p50/p95/p99)
+- Tiempo de respuesta de la DB (segmentos en APM > Databases)
+- Apdex
+- Errores
+- Alertas disparadas
+
+**Local:**
 ```bash
 BASE_URL=http://localhost:5002 TOKEN=uniandes-devops-2026 k6 run scripts/stress_test.js
 ```
 
-Para Fargate, cambio `BASE_URL` por el DNS de mi ALB. Utilizo esta ejecución para capturar mis evidencias de tiempo de respuesta, DB, Apdex, errores y alertas.
-
-### Error controlado para sustentación
-
-El endpoint `/debug/newrelic-error` está apagado por defecto. Si necesito demostrar Errors Inbox en una prueba controlada, activo:
-
+**Cloud (Fargate):**
 ```bash
-ENABLE_ERROR_TEST_ENDPOINT=true
+BASE_URL=https://<alb-dns> TOKEN=uniandes-devops-2026 k6 run scripts/stress_test.js
 ```
 
-Después ejecuto `GET /debug/newrelic-error` y vuelvo a dejar la variable en `false`.
+El script (`scripts/stress_test.js`) ejecuta una rampa que llega a 200 VUs para estresar la DB y disparar condiciones de alerta.
+
+### Archivos de configuración
+
+| Archivo | Propósito |
+|---------|-----------|
+| `newrelic.ini` | Configuración versionada del agente (sin license key). Incluye transaction tracer, SQL obfuscation, distributed tracing, error collector, application logging. |
+| `Dockerfile` | Ejecuta gunicorn bajo `newrelic-admin run-program`. ENV no-secretas. |
+| `docker-compose.yml` | Servicio `newrelic-infra` + carga `.env.local` en app. |
+| `task-def.json` | Inyecta license key desde SSM + sidecar `nri-ecs` para Fargate. |
+| `scripts/stress_test.js` | Escenario k6 para análisis de capacidades. |
+| `requirements.txt` | Agrega `newrelic==9.13.0`. |
+
+### Alertas configuradas (Fase 5)
+
+Mínimo a crear en New Relic Alerts:
+1. Error rate > 5% durante 5 min → Critical
+2. Apdex < 0.8 durante 5 min → Warning
+3. Web response time p95 > 1s durante 5 min → Warning
+4. Database response time p95 > 500ms durante 5 min → Warning
+5. Host/Container down → Critical
+
+Notificación a email (mínimo) y opcionalmente Slack via workflow.
 
 ## Flujo de CI/CD (AWS)
 

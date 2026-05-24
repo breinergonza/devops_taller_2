@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
 from flask_restful import Api
@@ -34,7 +34,8 @@ jwt = JWTManager()
 
 def create_app(test_config=None):
     """Construye una instancia de la aplicacion Flask."""
-    app = Flask(__name__)
+    template_dir = Path(__file__).parent / "templates"
+    app = Flask(__name__, template_folder=str(template_dir))
 
     # Configuracion por defecto (puede sobreescribirse via env vars o test_config)
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
@@ -97,11 +98,23 @@ def create_app(test_config=None):
         BlacklistByEmailResource,
         HealthCheckResource,
     )
+    from src.views.dashboard_view import (
+        DashboardStatsResource,
+        DashboardEventsResource,
+        DashboardChartDataResource,
+        HealthCheckDashboardResource,
+    )
 
     api = Api(app)
     api.add_resource(HealthCheckResource, "/ping")
     api.add_resource(BlacklistResource, "/blacklists")
     api.add_resource(BlacklistByEmailResource, "/blacklists/<string:email>")
+
+    # Dashboard API endpoints
+    api.add_resource(DashboardStatsResource, "/api/dashboard/stats")
+    api.add_resource(DashboardEventsResource, "/api/dashboard/events")
+    api.add_resource(DashboardChartDataResource, "/api/dashboard/charts/<string:chart_type>")
+    api.add_resource(HealthCheckDashboardResource, "/api/dashboard/health")
 
     # Swagger endpoints wrapper para que Flasgger los detecte
     @app.route("/ping", methods=["GET"])
@@ -191,9 +204,14 @@ def create_app(test_config=None):
         bl = BlacklistByEmailResource()
         return bl.get(email)
 
-    # Endpoint raiz informativo (Beanstalk lo usa para health checks basicos)
+    # Endpoint raiz - Dashboard
     @app.route("/")
-    def index():
+    def dashboard():
+        return render_template("index.html")
+
+    # Endpoint raiz API info (para Beanstalk health checks)
+    @app.route("/api/info")
+    def api_info():
         return jsonify(
             {
                 "service": "blacklist-microservice",

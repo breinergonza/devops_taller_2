@@ -1,0 +1,1191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Blacklist Core API · Operational Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.49.1/dist/apexcharts.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter','ui-sans-serif','system-ui'],
+          mono: ['"JetBrains Mono"','ui-monospace','monospace'],
+        },
+        colors: {
+          app:   { bg:'#ECEFF4', soft:'#F1F5F9', card:'#FFFFFF', tint:'#F8FAFC' },
+          ink:   '#0F172A',
+          body:  '#334155',
+          mute:  '#64748B',
+          line:  '#E2E8F0',
+          line2: '#CBD5E1',
+          ok:    '#059669',
+          okSoft:'#D1FAE5',
+          warn:  '#D97706',
+          warnSoft:'#FEF3C7',
+          bad:   '#DC2626',
+          badSoft:'#FEE2E2',
+          tele:  '#0284C7',
+          teleSoft:'#E0F2FE',
+          violet:'#7C3AED',
+          violetSoft:'#EDE9FE'
+        }
+      }
+    }
+  }
+</script>
+<style>
+  html, body { margin:0; padding:0; background:#DEE3EC; color:#0F172A; font-family:'Inter',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'JetBrains Mono', ui-monospace, monospace; }
+
+  /* stage that fits any viewport */
+  #stage { position:fixed; inset:0; overflow:hidden;
+    background:
+      radial-gradient(900px 500px at 90% -10%, rgba(2,132,199,0.10), transparent 60%),
+      radial-gradient(700px 400px at 0% 100%, rgba(124,58,237,0.06), transparent 60%),
+      #ECEFF4;
+  }
+  #canvas {
+    position:absolute; top:50%; left:50%;
+    width:1600px; height:900px;
+    transform-origin: center center;
+    box-shadow: 0 30px 80px -20px rgba(15,23,42,0.15), 0 0 0 1px #E2E8F0;
+    background:#F4F6FA;
+    border-radius:18px;
+    overflow:hidden;
+  }
+
+  .card { background:#FFFFFF; border:1px solid #E2E8F0; border-radius:12px; overflow:hidden; }
+  .card-soft { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; overflow:hidden; }
+  .chip { display:inline-flex; align-items:center; gap:.35rem; padding:.15rem .5rem; font-size:11px; border-radius:999px; background:#F1F5F9; border:1px solid #E2E8F0; font-family:'JetBrains Mono',monospace; color:#334155; white-space:nowrap; flex-shrink:0; }
+  .dot { width:.5rem; height:.5rem; border-radius:999px; display:inline-block; }
+
+  /* status helpers */
+  .c-ok { color:#059669 } .bg-ok { background:#059669 }
+  .c-warn { color:#D97706 } .bg-warn { background:#D97706 }
+  .c-bad { color:#DC2626 } .bg-bad { background:#DC2626 }
+  .c-tele { color:#0284C7 } .bg-tele { background:#0284C7 }
+  .c-mute { color:#94A3B8 } .bg-mute { background:#94A3B8 }
+  .c-violet { color:#7C3AED } .bg-violet { background:#7C3AED }
+
+  /* pulse */
+  @keyframes pulseDot { 0%,100% { opacity:1; transform:scale(1) } 50% { opacity:.45; transform:scale(.8) } }
+  .pulse { animation: pulseDot 1.4s ease-in-out infinite; }
+
+  /* tabs */
+  .tab { font-family:'JetBrains Mono', monospace; font-size:12px; padding:.35rem .75rem; border-radius:8px; color:#64748B; border:1px solid transparent; }
+  .tab:hover { color:#0F172A; background:#F1F5F9; }
+  .tab-active { color:#0F172A; background:#FFFFFF; border-color:#E2E8F0; box-shadow:0 1px 0 rgba(15,23,42,0.03); }
+
+  /* slider light */
+  .slider { -webkit-appearance:none; appearance:none; width:100%; height:5px; background:#E2E8F0; border-radius:999px; outline:none; }
+  .slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:16px; height:16px; border-radius:50%; background:#0284C7; box-shadow:0 0 0 4px rgba(2,132,199,.15); cursor:pointer; border:none; }
+  .slider::-moz-range-thumb { width:16px; height:16px; border-radius:50%; background:#0284C7; border:none; cursor:pointer; }
+
+  /* stream rows */
+  .stream-row { font-family:'JetBrains Mono', monospace; font-size:11.5px; padding:.32rem .6rem; border-bottom:1px solid #F1F5F9; animation: fadeIn .35s ease; line-height:1.4; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(-2px) } to { opacity:1; transform: none } }
+
+  /* pipe arrow */
+  .pipe::after { content:''; position:absolute; right:-18px; top:50%; width:18px; height:2px; background:linear-gradient(90deg, #CBD5E1, transparent); }
+  .pipe:last-child::after { display:none; }
+
+  /* scroll */
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-thumb { background:#CBD5E1; border-radius:6px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+
+  /* apex */
+  .apexcharts-tooltip { background:#FFFFFF !important; border:1px solid #E2E8F0 !important; color:#0F172A !important; font-family:'JetBrains Mono',monospace !important; font-size:11px !important; box-shadow:0 8px 24px rgba(15,23,42,0.08) !important; }
+  .apexcharts-tooltip-title { background:#F8FAFC !important; border-bottom:1px solid #E2E8F0 !important; color:#0F172A !important; }
+
+  .term { background:#0F172A; color:#E2E8F0; border-radius:10px; font-family:'JetBrains Mono', monospace; font-size:12.5px; }
+  .term-head { background:#1E293B; padding:.4rem .65rem; display:flex; gap:.35rem; align-items:center; border-radius:10px 10px 0 0; }
+  .term-dot { width:10px; height:10px; border-radius:50%; }
+
+  /* prevent text wrapping in tight cards */
+  .nw { white-space:nowrap; }
+  .tr { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  /* monospace short labels always single-line */
+  #pane-command [id^="kpi-"],
+  #pane-command [id^="lat-"],
+  #pane-command [id^="db-"],
+  #pane-command [id^="task"],
+  #pane-command [id^="cnt-"],
+  #pane-command [id^="ctr-"],
+  #pane-command [id^="lk-"],
+  #pane-command #vu-val, #pane-command #vu-scenario { white-space:nowrap; }
+
+  /* let CSS grid 1fr tracks honor their size instead of expanding to fit content */
+  #pane-command, #pane-command > *, #pane-command > * > *, #pane-command > * > * > * { min-height: 0; min-width: 0; }
+  #stream { max-height: 100%; }
+</style>
+</head>
+
+<body>
+<div id="stage">
+  <div id="canvas">
+
+<!-- ============== HEADER ============== -->
+<header class="h-[54px] flex items-center px-5 border-b border-line bg-white gap-5">
+  <div class="flex items-center gap-2.5 shrink-0">
+    <div class="w-7 h-7 rounded-md bg-app-tint border border-line flex items-center justify-center relative">
+      <div class="w-3 h-3 rounded-sm bg-tele"></div>
+      <div class="absolute -bottom-[3px] -right-[3px] w-2 h-2 rounded-full bg-ok pulse"></div>
+    </div>
+    <div class="leading-tight">
+      <div class="text-[12.5px] font-semibold tracking-tight nw">The Last One</div>
+      <div class="text-[10px] mono text-mute -mt-0.5 nw">blacklist-core · v1.4.2</div>
+    </div>
+  </div>
+  <div class="h-6 w-px bg-line shrink-0"></div>
+  <div class="leading-tight min-w-0">
+    <div class="text-[13px] font-semibold tr">Blacklist Core API · Operational Dashboard</div>
+    <div class="text-[11px] text-mute tr">AWS Fargate ECS · Blue/Green deploys · monitored via New Relic NerdGraph</div>
+  </div>
+
+  <nav id="tabbar" class="ml-auto flex items-center gap-1 p-1 rounded-lg bg-app-soft border border-line shrink-0">
+    <button data-tab="command" class="tab tab-active nw">▣ Command</button>
+    <button data-tab="arch"    class="tab nw">⌗ Architecture</button>
+    <button data-tab="api"     class="tab nw">▸ API Reference</button>
+  </nav>
+
+  <div class="flex items-center gap-3 pl-5 border-l border-line shrink-0">
+    <span class="chip"><span class="dot bg-ok pulse"></span>prod · us-east-1a</span>
+    <div class="text-right leading-tight">
+      <div class="text-[12px] font-medium nw">Breitner Gonzalez</div>
+      <div class="text-[10px] mono text-mute nw">202217107 · b.gonzalez@uniandes.edu.co</div>
+    </div>
+    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-tele to-violet flex items-center justify-center text-[11px] font-semibold text-white">BG</div>
+  </div>
+</header>
+
+<!-- ============== TAB: COMMAND ============== -->
+<section id="pane-command" class="pane h-[846px] p-4 grid gap-4" style="grid-template-columns: 1fr 380px;">
+
+  <!-- LEFT MAIN -->
+  <div class="grid gap-3" style="grid-template-rows: 110px 252px 230px 1fr;">
+
+    <!-- KPI STRIP + Pipeline line -->
+    <div class="grid grid-cols-4 gap-3">
+      <div class="card p-3.5">
+        <div class="flex justify-between items-start gap-2">
+          <div class="text-[10px] mono text-mute uppercase tracking-wider nw">Blacklisted</div>
+          <span class="chip"><span class="dot bg-tele"></span>postgres</span>
+        </div>
+        <div class="mt-1 flex items-baseline gap-2">
+          <div id="kpi-total" class="text-3xl font-semibold mono c-tele">1,244</div>
+          <div class="text-[11px] mono c-ok nw">+18 / 5m</div>
+        </div>
+        <div class="text-[10px] mono text-mute mt-0.5 tr">email records · table blacklist</div>
+      </div>
+
+      <div class="card p-3.5">
+        <div class="flex justify-between items-start gap-2">
+          <div class="text-[10px] mono text-mute uppercase tracking-wider nw">Apdex</div>
+          <span id="apdex-chip" class="chip"><span class="dot bg-ok"></span>satisfied</span>
+        </div>
+        <div class="mt-1 flex items-baseline gap-2">
+          <div id="kpi-apdex" class="text-3xl font-semibold mono c-ok">0.94</div>
+          <div class="text-[11px] mono text-mute nw">T = 0.5s</div>
+        </div>
+        <div class="text-[10px] mono text-mute mt-0.5 tr">target ≥ 0.85 · n=2134</div>
+      </div>
+
+      <div class="card p-3.5">
+        <div class="flex justify-between items-start gap-2">
+          <div class="text-[10px] mono text-mute uppercase tracking-wider nw">Error rate</div>
+          <span id="err-chip" class="chip"><span class="dot bg-ok"></span>nominal</span>
+        </div>
+        <div class="mt-1 flex items-baseline gap-2">
+          <div id="kpi-err" class="text-3xl font-semibold mono">0.4<span class="text-base text-mute">%</span></div>
+          <div class="text-[11px] mono text-mute nw">5xx · 401</div>
+        </div>
+        <div class="text-[10px] mono text-mute mt-0.5 nw">alert &gt; 5%</div>
+      </div>
+
+      <div class="card p-3.5">
+        <div class="flex justify-between items-start gap-2">
+          <div class="text-[10px] mono text-mute uppercase tracking-wider nw">Throughput</div>
+          <span id="rps-chip" class="chip"><span class="dot bg-tele"></span>k6 · 25 VUs</span>
+        </div>
+        <div class="mt-1 flex items-baseline gap-2">
+          <div id="kpi-rps" class="text-3xl font-semibold mono">142</div>
+          <div class="text-[11px] mono text-mute nw">req / min</div>
+        </div>
+        <div class="text-[10px] mono text-mute mt-0.5 tr">peak today · 1,840 rpm</div>
+      </div>
+    </div>
+
+    <!-- Charts row: Latency + Apdex + Errors -->
+    <div class="grid gap-3" style="grid-template-columns: 1.4fr 0.9fr 1fr;">
+
+      <!-- Latency -->
+      <div class="card p-3.5 flex flex-col">
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="text-[10px] mono text-mute uppercase tracking-wider nw">APM · Latency</div>
+            <div class="text-[13px] font-semibold tr">Response time percentiles</div>
+          </div>
+          <div class="flex items-center gap-2 text-[10px] mono text-body nw">
+            <span class="flex items-center gap-1"><span class="dot bg-tele"></span>p50</span>
+            <span class="flex items-center gap-1"><span class="dot bg-warn"></span>p95</span>
+            <span class="flex items-center gap-1"><span class="dot bg-bad"></span>p99</span>
+          </div>
+        </div>
+        <div id="chart-latency" class="flex-1 -mb-2"></div>
+        <div class="grid grid-cols-3 gap-2 pt-2 border-t border-line mt-1">
+          <div><div class="text-[9px] mono text-mute uppercase nw">p50</div><div id="lat-p50" class="text-[15px] font-semibold mono c-tele">45<span class="text-[11px] text-mute">ms</span></div></div>
+          <div><div class="text-[9px] mono text-mute uppercase nw">p95</div><div id="lat-p95" class="text-[15px] font-semibold mono c-warn">118<span class="text-[11px] text-mute">ms</span></div></div>
+          <div><div class="text-[9px] mono text-mute uppercase nw">p99</div><div id="lat-p99" class="text-[15px] font-semibold mono c-bad">312<span class="text-[11px] text-mute">ms</span></div></div>
+        </div>
+      </div>
+
+      <!-- Apdex Gauge -->
+      <div class="card p-3.5 flex flex-col">
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="text-[10px] mono text-mute uppercase tracking-wider nw">New Relic APM</div>
+            <div class="text-[13px] font-semibold tr">Apdex satisfaction</div>
+          </div>
+          <span id="gauge-state" class="chip"><span class="dot bg-ok"></span>satisfied</span>
+        </div>
+        <div id="chart-apdex" class="flex-1 -my-1"></div>
+        <div class="grid grid-cols-3 gap-1 text-center text-[9px] mono">
+          <div class="rounded-md py-1" style="background:#D1FAE5;color:#047857;">&gt; 0.85<br/>satisfied</div>
+          <div class="rounded-md py-1" style="background:#FEF3C7;color:#B45309;">0.7–0.85<br/>tolerating</div>
+          <div class="rounded-md py-1" style="background:#FEE2E2;color:#B91C1C;">&lt; 0.7<br/>frustrated</div>
+        </div>
+      </div>
+
+      <!-- Errors -->
+      <div class="card p-3.5 flex flex-col">
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="text-[10px] mono text-mute uppercase tracking-wider nw">Errors · 5xx + 401</div>
+            <div class="text-[13px] font-semibold tr">Error rate timeline</div>
+          </div>
+          <span id="err-alert" class="chip"><span class="dot bg-ok"></span>no incidents</span>
+        </div>
+        <div id="chart-err" class="flex-1 -mb-1"></div>
+        <div class="grid grid-cols-3 gap-1.5 text-center text-[10px] mono pt-1">
+          <div class="card-soft py-1.5"><div class="text-mute text-[9px]">401</div><div id="cnt-401" class="text-ink text-[13px]">7</div></div>
+          <div class="card-soft py-1.5"><div class="text-mute text-[9px]">5xx</div><div id="cnt-5xx" class="text-ink text-[13px]">2</div></div>
+          <div class="card-soft py-1.5"><div class="text-mute text-[9px]">notice_err</div><div id="cnt-notice" class="text-ink text-[13px]">9</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mid row: DB bars + Lookup donut + CI/CD pipeline -->
+    <div class="grid gap-3" style="grid-template-columns: 1.3fr 0.8fr 1.2fr;">
+      <!-- DB perf -->
+      <div class="card p-3.5">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div class="min-w-0">
+            <div class="text-[10px] mono text-mute uppercase tracking-wider nw">Database segment</div>
+            <div class="text-[13px] font-semibold tr">PostgreSQL response</div>
+          </div>
+          <span id="db-chip" class="chip"><span class="dot bg-ok"></span>nominal</span>
+        </div>
+        <div class="space-y-2 mono text-[11px]">
+          <div>
+            <div class="flex justify-between gap-2 mb-0.5"><span class="text-body tr min-w-0">SELECT · /blacklists/&lt;email&gt;</span><span id="db-select" class="text-ink nw">12 ms</span></div>
+            <div class="h-1.5 bg-line rounded"><div id="db-select-bar" class="h-1.5 bg-ok rounded" style="width:18%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between gap-2 mb-0.5"><span class="text-body tr min-w-0">INSERT · /blacklists</span><span id="db-insert" class="text-ink nw">22 ms</span></div>
+            <div class="h-1.5 bg-line rounded"><div id="db-insert-bar" class="h-1.5 bg-ok rounded" style="width:28%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between gap-2 mb-0.5"><span class="text-body tr min-w-0">tx commit lock</span><span id="db-commit" class="text-ink nw">8 ms</span></div>
+            <div class="h-1.5 bg-line rounded"><div id="db-commit-bar" class="h-1.5 bg-ok rounded" style="width:11%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between gap-2 mb-0.5"><span class="text-body tr min-w-0">pool wait</span><span id="db-pool" class="text-ink nw">3 ms</span></div>
+            <div class="h-1.5 bg-line rounded"><div id="db-pool-bar" class="h-1.5 bg-ok rounded" style="width:5%"></div></div>
+          </div>
+        </div>
+        <div class="mt-2 pt-2 border-t border-line text-[10px] mono text-mute flex justify-between gap-2 nw">
+          <span class="tr min-w-0">RDS · db.t3.medium</span>
+          <span id="db-pool-info">8 / 20 conns</span>
+        </div>
+      </div>
+
+      <!-- Lookup ratio -->
+      <div class="card p-3.5 flex flex-col">
+        <div>
+          <div class="text-[10px] mono text-mute uppercase tracking-wider tr">GET /blacklists/&lt;email&gt;</div>
+          <div class="text-[13px] font-semibold nw">Lookup hit ratio</div>
+        </div>
+        <div id="chart-lookup" class="flex-1 -my-1"></div>
+        <div class="grid grid-cols-2 gap-1 text-[10px] mono">
+          <div class="flex items-center gap-1.5 nw"><span class="dot bg-bad"></span>blacklisted <span id="lk-true" class="ml-auto text-ink">34%</span></div>
+          <div class="flex items-center gap-1.5 nw"><span class="dot bg-tele"></span>clean <span id="lk-false" class="ml-auto text-ink">66%</span></div>
+        </div>
+      </div>
+
+      <!-- CI/CD pipeline status -->
+      <div class="card p-3.5">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <div class="min-w-0">
+            <div class="text-[10px] mono text-mute uppercase tracking-wider nw">CI / CD</div>
+            <div class="text-[13px] font-semibold tr">Blue / Green deployment</div>
+          </div>
+          <span class="chip" style="background:#D1FAE5;color:#047857;border-color:#A7F3D0;"><span class="dot bg-ok"></span>STABLE</span>
+        </div>
+        <div class="mt-3 flex items-center justify-between gap-0 mono text-[10.5px]">
+          <div class="pipe relative flex flex-col items-center gap-1">
+            <div class="w-7 h-7 rounded-full bg-okSoft border border-ok/30 c-ok flex items-center justify-center">✓</div>
+            <div class="text-body nw">Pipeline</div>
+          </div>
+          <div class="pipe relative flex flex-col items-center gap-1">
+            <div class="w-7 h-7 rounded-full bg-okSoft border border-ok/30 c-ok flex items-center justify-center">✓</div>
+            <div class="text-body nw">Build</div>
+          </div>
+          <div class="pipe relative flex flex-col items-center gap-1">
+            <div class="w-7 h-7 rounded-full bg-okSoft border border-ok/30 c-ok flex items-center justify-center">✓</div>
+            <div class="text-body nw">Tests · 312</div>
+          </div>
+          <div class="pipe relative flex flex-col items-center gap-1">
+            <div class="w-7 h-7 rounded-full bg-okSoft border border-ok/30 c-ok flex items-center justify-center">✓</div>
+            <div class="text-body nw">Deploy</div>
+          </div>
+          <div class="pipe relative flex flex-col items-center gap-1">
+            <div class="w-7 h-7 rounded-full bg-teleSoft border border-tele/30 c-tele flex items-center justify-center"><div class="w-2 h-2 rounded-full bg-tele pulse"></div></div>
+            <div class="text-body nw">Live</div>
+          </div>
+        </div>
+        <div class="mt-3 pt-2 border-t border-line text-[10px] mono text-mute flex justify-between gap-2 nw">
+          <span>commit <span class="text-ink">a7f2e91</span></span>
+          <span class="tr min-w-0">b.gonzalez · 14m ago</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live stream -->
+    <div class="card overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between px-3.5 py-2 border-b border-line gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="text-[10px] mono text-mute uppercase tracking-wider nw">Live</div>
+          <div class="text-[13px] font-semibold nw">BlacklistEvent stream</div>
+          <span class="chip"><span class="dot bg-ok pulse"></span>streaming · NerdGraph</span>
+        </div>
+        <div class="flex items-center gap-2 text-[11px] mono">
+          <button id="stream-pause" class="chip hover:border-tele">⏸ pause</button>
+          <button class="chip">filter</button>
+        </div>
+      </div>
+      <div id="stream" class="flex-1 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT RAIL -->
+  <aside class="grid gap-3" style="grid-template-rows: 1fr auto auto;">
+
+    <!-- Stress tester -->
+    <div class="card p-4 flex flex-col">
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="text-[10px] mono text-mute uppercase tracking-wider nw">Simulator</div>
+          <div class="text-[14px] font-semibold nw">k6 Stress Tester</div>
+        </div>
+        <span class="chip"><span class="dot bg-tele pulse"></span>driving</span>
+      </div>
+
+      <div class="mt-3 flex items-baseline gap-2">
+        <div id="vu-val" class="text-4xl font-semibold mono c-tele">25</div>
+        <div class="text-[11px] mono text-mute nw tr min-w-0">VUs · <span id="vu-scenario" class="text-body">cool steady-state</span></div>
+      </div>
+
+      <input id="vu-slider" type="range" min="0" max="300" value="25" class="slider mt-3" />
+      <div class="flex justify-between mono text-[9px] text-mute mt-1 px-0.5">
+        <span>0</span><span>50</span><span>150 ⚠</span><span>200 ●</span><span>300</span>
+      </div>
+
+      <div class="mt-3 grid grid-cols-5 gap-1">
+        <button data-vu="25"  class="chip justify-center hover:border-tele">25</button>
+        <button data-vu="100" class="chip justify-center hover:border-tele">100</button>
+        <button data-vu="160" class="chip justify-center hover:border-warn">160</button>
+        <button data-vu="220" class="chip justify-center hover:border-bad">220</button>
+        <button data-vu="300" class="chip justify-center hover:border-bad">300</button>
+      </div>
+
+      <div class="mt-4 text-[10px] mono text-mute uppercase tracking-wider">NerdGraph alerts (5)</div>
+      <div class="mt-1.5 space-y-1 flex-1 overflow-hidden" id="alert-list">
+        <div data-alert="apdex"   class="alert flex items-center gap-2 card-soft px-2.5 py-1.5 text-[11px] mono nw"><span class="dot bg-mute"></span><span class="text-mute flex-1">Low Apdex (&lt; 0.8)</span></div>
+        <div data-alert="error"   class="alert flex items-center gap-2 card-soft px-2.5 py-1.5 text-[11px] mono nw"><span class="dot bg-mute"></span><span class="text-mute flex-1">High error rate (&gt; 5%)</span></div>
+        <div data-alert="db"      class="alert flex items-center gap-2 card-soft px-2.5 py-1.5 text-[11px] mono nw"><span class="dot bg-mute"></span><span class="text-mute flex-1">Slow DB queries (&gt; 500 ms)</span></div>
+        <div data-alert="latency" class="alert flex items-center gap-2 card-soft px-2.5 py-1.5 text-[11px] mono nw"><span class="dot bg-mute"></span><span class="text-mute flex-1">p99 latency &gt; 1.0 s</span></div>
+        <div data-alert="auth"    class="alert flex items-center gap-2 card-soft px-2.5 py-1.5 text-[11px] mono nw"><span class="dot bg-mute"></span><span class="text-mute flex-1">Security · 401 burst</span></div>
+      </div>
+    </div>
+
+    <!-- Auth toggle -->
+    <div class="card p-3.5">
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="text-[10px] mono text-mute uppercase tracking-wider nw">Authorization</div>
+          <div class="text-[13px] font-semibold nw">Bearer token</div>
+        </div>
+        <div class="text-right text-[10px] mono text-mute nw">
+          <div>200: <span id="ctr-200" class="text-ink">142</span></div>
+          <div>401: <span id="ctr-401" class="text-ink">0</span></div>
+        </div>
+      </div>
+      <div class="mt-2 card-soft mono text-[10.5px] px-2.5 py-1.5">
+        <span class="text-mute">Authorization:</span>
+        <span id="auth-token" class="text-ink break-all"> Bearer uniandes-devops-2026</span>
+      </div>
+      <div class="mt-2 flex rounded-md border border-line overflow-hidden">
+        <button id="auth-valid"   class="auth-btn flex-1 px-2 py-1.5 text-[11px] mono nw" style="background:#D1FAE5;color:#047857;">✓ valid token</button>
+        <button id="auth-invalid" class="auth-btn flex-1 px-2 py-1.5 text-[11px] mono text-mute hover:bg-badSoft hover:c-bad nw">✗ invalid</button>
+      </div>
+    </div>
+
+    <!-- Fargate cluster -->
+    <div class="card p-3.5">
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <div class="min-w-0">
+          <div class="text-[10px] mono text-mute uppercase tracking-wider nw">AWS Fargate · us-east-1a</div>
+          <div class="text-[13px] font-semibold nw">ECS cluster · 2/2</div>
+        </div>
+        <span class="chip"><span class="dot bg-ok pulse"></span>healthy</span>
+      </div>
+      <div class="space-y-2">
+        <div class="card-soft p-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <div class="w-7 h-7 rounded-md flex items-center justify-center mono text-[10px] shrink-0" style="background:#E0F2FE;color:#0284C7;border:1px solid #BAE6FD;">FL</div>
+              <div class="min-w-0">
+                <div class="text-[12px] font-medium leading-tight nw">App Container</div>
+                <div class="text-[10px] mono text-mute tr">gunicorn + flask :8080</div>
+              </div>
+            </div>
+            <span class="chip"><span class="dot bg-ok pulse"></span>RUN</span>
+          </div>
+          <div class="mt-1.5 grid grid-cols-3 gap-1 text-[10px] mono nw">
+            <div><span class="text-mute">cpu </span><span id="task1-cpu" class="text-ink">34%</span></div>
+            <div><span class="text-mute">mem </span><span id="task1-mem" class="text-ink">512</span></div>
+            <div><span class="text-mute">up </span><span class="text-ink">14m</span></div>
+          </div>
+        </div>
+        <div class="card-soft p-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <div class="w-7 h-7 rounded-md flex items-center justify-center mono text-[10px] shrink-0" style="background:#EDE9FE;color:#7C3AED;border:1px solid #DDD6FE;">NR</div>
+              <div class="min-w-0">
+                <div class="text-[12px] font-medium leading-tight nw">Sidecar</div>
+                <div class="text-[10px] mono text-mute tr">newrelic-infra</div>
+              </div>
+            </div>
+            <span class="chip"><span class="dot bg-ok pulse"></span>RUN</span>
+          </div>
+          <div class="mt-1.5 grid grid-cols-3 gap-1 text-[10px] mono nw">
+            <div><span class="text-mute">cpu </span><span id="task2-cpu" class="text-ink">9%</span></div>
+            <div><span class="text-mute">mem </span><span id="task2-mem" class="text-ink">128</span></div>
+            <div><span class="text-mute">evt/s </span><span id="task2-evt" class="text-ink">38</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</section>
+
+<!-- ============== TAB: ARCHITECTURE ============== -->
+<section id="pane-arch" class="pane h-[846px] p-6 hidden">
+  <div class="flex items-end justify-between mb-4">
+    <div>
+      <div class="text-[11px] mono text-mute uppercase tracking-wider">Section · Blueprint</div>
+      <h2 class="text-2xl font-semibold">Architecture diagrams</h2>
+      <p class="text-[13px] text-body mt-1">Three perspectives on the same Fargate-hosted service · click a card for the layer below.</p>
+    </div>
+    <div id="arch-tabs" class="flex items-center gap-1 p-1 rounded-lg bg-app-soft border border-line">
+      <button data-arch="deploy"  class="arch-tab tab tab-active">Deployment</button>
+      <button data-arch="network" class="arch-tab tab">Networking</button>
+      <button data-arch="tele"    class="arch-tab tab">Telemetry flow</button>
+    </div>
+  </div>
+
+  <!-- DEPLOY -->
+  <div id="arch-deploy" class="arch-pane card p-6" style="height: calc(100% - 110px);">
+    <div class="grid grid-cols-5 gap-6 items-center">
+      <div class="card-soft p-4 text-center">
+        <div class="text-[10px] mono text-mute uppercase">source</div>
+        <div class="w-12 h-12 mx-auto my-2 rounded-md flex items-center justify-center mono c-tele text-base" style="background:#E0F2FE;border:1px solid #BAE6FD;">{}</div>
+        <div class="text-[13px] font-medium">Git repo</div>
+        <div class="text-[10px] mono text-mute mt-1">main branch trigger</div>
+      </div>
+      <div class="card-soft p-4 text-center">
+        <div class="text-[10px] mono text-mute uppercase">orchestrate</div>
+        <div class="w-12 h-12 mx-auto my-2 rounded-md flex items-center justify-center mono text-base" style="background:#EDE9FE;color:#7C3AED;border:1px solid #DDD6FE;">▷</div>
+        <div class="text-[13px] font-medium">CodePipeline</div>
+        <div class="text-[10px] mono text-mute mt-1">3-stage pipeline</div>
+      </div>
+      <div class="card-soft p-4 text-center">
+        <div class="text-[10px] mono text-mute uppercase">build &amp; test</div>
+        <div class="w-12 h-12 mx-auto my-2 rounded-md flex items-center justify-center mono c-warn text-base" style="background:#FEF3C7;border:1px solid #FDE68A;">⚙</div>
+        <div class="text-[13px] font-medium">CodeBuild</div>
+        <div class="text-[10px] mono text-mute mt-1">pytest · docker push</div>
+      </div>
+      <div class="card-soft p-4 text-center">
+        <div class="text-[10px] mono text-mute uppercase">deploy</div>
+        <div class="w-12 h-12 mx-auto my-2 rounded-md flex items-center justify-center mono c-tele text-base" style="background:#E0F2FE;border:1px solid #BAE6FD;">⇄</div>
+        <div class="text-[13px] font-medium">CodeDeploy</div>
+        <div class="text-[10px] mono text-mute mt-1">Blue / Green TGs</div>
+      </div>
+      <div class="card-soft p-4 text-center">
+        <div class="text-[10px] mono text-mute uppercase">runtime</div>
+        <div class="w-12 h-12 mx-auto my-2 rounded-md flex items-center justify-center mono c-ok text-base" style="background:#D1FAE5;border:1px solid #A7F3D0;">▣</div>
+        <div class="text-[13px] font-medium">Fargate ECS</div>
+        <div class="text-[10px] mono text-mute mt-1">2 tasks · 0 downtime</div>
+      </div>
+    </div>
+
+    <div class="mt-6 mono text-[11px] text-mute card-soft p-3 flex items-center gap-2 flex-wrap">
+      <span class="text-body">flow:</span>
+      <span class="c-tele">git push</span> <span>→</span>
+      <span class="text-body">trigger pipeline</span> <span>→</span>
+      <span class="text-body">pytest · 312 cases</span> <span>→</span>
+      <span class="text-body">push image · ECR</span> <span>→</span>
+      <span class="c-ok">Blue/Green swap</span> <span>→</span>
+      <span class="text-body">ALB cuts traffic</span>
+    </div>
+
+    <div class="mt-6 grid grid-cols-4 gap-3 mono text-[12px]">
+      <div class="card-soft p-3"><div class="text-mute text-[10px]">Build time avg</div><div class="text-ink text-lg">2m 41s</div></div>
+      <div class="card-soft p-3"><div class="text-mute text-[10px]">Deploy time avg</div><div class="text-ink text-lg">3m 12s</div></div>
+      <div class="card-soft p-3"><div class="text-mute text-[10px]">Pytest cases</div><div class="text-ink text-lg">312 passed · 0 failed</div></div>
+      <div class="card-soft p-3"><div class="text-mute text-[10px]">Rollback policy</div><div class="text-ink text-lg">auto on 5% errors</div></div>
+    </div>
+  </div>
+
+  <!-- NETWORK -->
+  <div id="arch-network" class="arch-pane card p-6 hidden" style="height: calc(100% - 110px);">
+    <div class="grid grid-cols-3 gap-4">
+      <div class="card-soft p-4">
+        <div class="text-[10px] mono text-mute uppercase mb-2">Edge · public</div>
+        <div class="text-[14px] font-medium">Application Load Balancer</div>
+        <div class="text-[11px] mono text-mute mt-1">Listener :80 · :8080</div>
+        <div class="mt-3 space-y-1.5 mono text-[11px]">
+          <div class="flex justify-between"><span class="text-mute">TG · Blue</span><span class="c-ok">healthy 2/2</span></div>
+          <div class="flex justify-between"><span class="text-mute">TG · Green</span><span class="text-mute">drained</span></div>
+          <div class="flex justify-between"><span class="text-mute">stickiness</span><span class="text-ink">off</span></div>
+        </div>
+      </div>
+      <div class="card-soft p-4">
+        <div class="text-[10px] mono text-mute uppercase mb-2">VPC · public subnet</div>
+        <div class="text-[14px] font-medium">Fargate ECS tasks</div>
+        <div class="text-[11px] mono text-mute mt-1">us-east-1a · sg-blacklist-app</div>
+        <div class="mt-3 space-y-1.5 mono text-[11px]">
+          <div class="flex justify-between"><span class="text-mute">ingress</span><span class="text-ink">:8080 from ALB</span></div>
+          <div class="flex justify-between"><span class="text-mute">egress</span><span class="text-ink">0.0.0.0/0</span></div>
+          <div class="flex justify-between"><span class="text-mute">tasks</span><span class="text-ink">2 desired</span></div>
+        </div>
+      </div>
+      <div class="card-soft p-4">
+        <div class="text-[10px] mono text-mute uppercase mb-2">Data plane</div>
+        <div class="text-[14px] font-medium">RDS PostgreSQL</div>
+        <div class="text-[11px] mono text-mute mt-1">db.t3.medium · multi-AZ</div>
+        <div class="mt-3 space-y-1.5 mono text-[11px]">
+          <div class="flex justify-between"><span class="text-mute">sg ingress</span><span class="text-ink">:5432 from app</span></div>
+          <div class="flex justify-between"><span class="text-mute">backups</span><span class="text-ink">7d retention</span></div>
+          <div class="flex justify-between"><span class="text-mute">storage</span><span class="text-ink">gp3 · 100 GB</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-6 card-soft p-4">
+      <div class="text-[10px] mono text-mute uppercase mb-3">Request path</div>
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-2 mono text-[12px]">
+        <span class="chip c-tele" style="background:#E0F2FE;border-color:#BAE6FD;">Internet</span>
+        <span class="text-mute">→</span>
+        <span class="chip">ALB :80/:8080</span>
+        <span class="text-mute">→</span>
+        <span class="chip">sg-blacklist-app</span>
+        <span class="text-mute">→</span>
+        <span class="chip">Fargate task :8080</span>
+        <span class="text-mute">→</span>
+        <span class="chip">sg-blacklist-rds</span>
+        <span class="text-mute">→</span>
+        <span class="chip c-ok" style="background:#D1FAE5;border-color:#A7F3D0;">PostgreSQL :5432</span>
+      </div>
+    </div>
+
+    <div class="mt-4 grid grid-cols-3 gap-3 mono text-[11px]">
+      <div class="card-soft p-3"><div class="text-mute text-[10px]">DNS</div><div class="text-ink">blacklist.uniandes-devops.io · Route 53 alias</div></div>
+      <div class="card-soft p-3"><div class="text-mute text-[10px]">Certificate</div><div class="text-ink">ACM · auto-renew · TLS 1.3</div></div>
+      <div class="card-soft p-3"><div class="text-mute text-[10px]">Secrets</div><div class="text-ink">SSM Parameter Store · KMS encrypted</div></div>
+    </div>
+  </div>
+
+  <!-- TELE -->
+  <div id="arch-tele" class="arch-pane card p-6 hidden" style="height: calc(100% - 110px);">
+    <div class="grid grid-cols-3 gap-4">
+      <div class="card-soft p-4">
+        <div class="text-[10px] mono text-mute uppercase mb-2">Inside the app</div>
+        <div class="text-[14px] font-medium">Flask Python agent</div>
+        <div class="text-[11px] mono text-mute mt-1">newrelic-python · 9.x</div>
+        <ul class="mt-3 space-y-1.5 mono text-[11.5px] text-body">
+          <li>• custom event <span class="c-tele">BlacklistEvent</span></li>
+          <li>• <span class="c-tele">notice_error()</span> on 401 burst</li>
+          <li>• transaction tracer · 100 ms</li>
+          <li>• distributed tracing enabled</li>
+        </ul>
+      </div>
+      <div class="card-soft p-4">
+        <div class="text-[10px] mono text-mute uppercase mb-2">Sidecar</div>
+        <div class="text-[14px] font-medium">newrelic-infra</div>
+        <div class="text-[11px] mono text-mute mt-1">Fargate sidecar container</div>
+        <ul class="mt-3 space-y-1.5 mono text-[11.5px] text-body">
+          <li>• host CPU / mem metrics</li>
+          <li>• logs forwarder → CloudWatch</li>
+          <li>• license key from SSM</li>
+          <li>• rate: ~38 events/sec</li>
+        </ul>
+      </div>
+      <div class="card-soft p-4">
+        <div class="text-[10px] mono text-mute uppercase mb-2">Sinks</div>
+        <div class="text-[14px] font-medium">New Relic Cloud · CloudWatch</div>
+        <div class="text-[11px] mono text-mute mt-1">5 NerdGraph policies</div>
+        <ul class="mt-3 space-y-1.5 mono text-[11.5px] text-body">
+          <li>• dashboards via NerdGraph</li>
+          <li>• alerts → email · Slack</li>
+          <li>• CloudWatch retention 30 d</li>
+          <li>• 1.2M events / day</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-6 card-soft p-4">
+      <div class="text-[10px] mono text-mute uppercase mb-3">Telemetry flow</div>
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-2 mono text-[12px]">
+        <span class="chip">Flask agent</span>
+        <span class="text-mute">→</span>
+        <span class="chip c-violet" style="background:#EDE9FE;border-color:#DDD6FE;">newrelic-infra sidecar</span>
+        <span class="text-mute">→</span>
+        <span class="chip">/taller4/NEW_RELIC_LICENSE_KEY</span>
+        <span class="text-mute">→</span>
+        <span class="chip c-tele" style="background:#E0F2FE;border-color:#BAE6FD;">New Relic Cloud</span>
+        <span class="text-mute">→</span>
+        <span class="chip">NerdGraph policies</span>
+        <span class="text-mute">→</span>
+        <span class="chip c-bad" style="background:#FEE2E2;border-color:#FECACA;">Alerts</span>
+      </div>
+    </div>
+
+    <div class="mt-4 grid grid-cols-5 gap-2 mono text-[10.5px]">
+      <div class="card-soft p-2.5"><div class="text-mute text-[10px]">policy</div><div class="text-ink">Low Apdex &lt; 0.8</div></div>
+      <div class="card-soft p-2.5"><div class="text-mute text-[10px]">policy</div><div class="text-ink">Error rate &gt; 5%</div></div>
+      <div class="card-soft p-2.5"><div class="text-mute text-[10px]">policy</div><div class="text-ink">DB &gt; 500ms</div></div>
+      <div class="card-soft p-2.5"><div class="text-mute text-[10px]">policy</div><div class="text-ink">p99 &gt; 1.0s</div></div>
+      <div class="card-soft p-2.5"><div class="text-mute text-[10px]">policy</div><div class="text-ink">401 burst</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== TAB: API REFERENCE ============== -->
+<section id="pane-api" class="pane h-[846px] p-6 hidden">
+  <div class="flex items-end justify-between mb-4">
+    <div>
+      <div class="text-[11px] mono text-mute uppercase tracking-wider">Section · Interface</div>
+      <h2 class="text-2xl font-semibold">API quick reference</h2>
+      <p class="text-[13px] text-body mt-1">Postman-style routes for the <span class="mono">devops-taller-4-flask</span> service.</p>
+    </div>
+    <div class="text-[12px] mono text-mute text-right">
+      <div>base · <span class="text-ink">https://blacklist.uniandes-devops.io</span></div>
+      <div>auth · <span class="text-ink">Bearer uniandes-devops-2026</span></div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-12 gap-4" style="height: calc(100% - 100px);">
+    <!-- route list -->
+    <div class="col-span-4 card overflow-hidden flex flex-col">
+      <div class="px-3.5 py-2.5 border-b border-line text-[10px] mono text-mute uppercase tracking-wider">Routes</div>
+      <div id="api-list" class="divide-y divide-line">
+        <button data-route="ping"   class="api-row w-full text-left px-3.5 py-3 flex items-center gap-2 hover:bg-app-soft tab-active">
+          <span class="chip" style="background:#E0F2FE;color:#0284C7;border-color:#BAE6FD;">GET</span>
+          <span class="mono text-[12.5px]">/ping</span>
+          <span class="ml-auto text-[10px] mono text-mute">public</span>
+        </button>
+        <button data-route="post"   class="api-row w-full text-left px-3.5 py-3 flex items-center gap-2 hover:bg-app-soft">
+          <span class="chip" style="background:#D1FAE5;color:#047857;border-color:#A7F3D0;">POST</span>
+          <span class="mono text-[12.5px]">/blacklists</span>
+          <span class="ml-auto text-[10px] mono text-mute">bearer · write</span>
+        </button>
+        <button data-route="get"    class="api-row w-full text-left px-3.5 py-3 flex items-center gap-2 hover:bg-app-soft">
+          <span class="chip" style="background:#E0F2FE;color:#0284C7;border-color:#BAE6FD;">GET</span>
+          <span class="mono text-[12.5px]">/blacklists/&lt;email&gt;</span>
+          <span class="ml-auto text-[10px] mono text-mute">bearer · read</span>
+        </button>
+      </div>
+      <div class="mt-auto p-3.5 border-t border-line text-[11px] mono text-mute space-y-1">
+        <div class="flex justify-between"><span>env</span><span class="text-ink">production</span></div>
+        <div class="flex justify-between"><span>app</span><span class="text-ink">devops-taller-4-flask</span></div>
+        <div class="flex justify-between"><span>secret store</span><span class="text-ink">SSM /taller4/*</span></div>
+        <div class="flex justify-between"><span>rate limit</span><span class="text-ink">600 rpm / token</span></div>
+      </div>
+    </div>
+
+    <!-- terminal block -->
+    <div class="col-span-8 flex flex-col gap-3">
+      <div class="term flex-1 flex flex-col">
+        <div class="term-head">
+          <div class="term-dot bg-bad"></div>
+          <div class="term-dot bg-warn"></div>
+          <div class="term-dot bg-ok"></div>
+          <div class="ml-3 text-[12px]" style="color:#94A3B8" id="term-title">curl · /ping</div>
+          <button id="copy-btn" class="ml-auto chip" style="background:#1E293B;color:#94A3B8;border-color:#334155">copy</button>
+        </div>
+        <pre id="term-body" class="p-4 leading-6 whitespace-pre-wrap flex-1 overflow-auto"></pre>
+      </div>
+
+      <div class="grid grid-cols-4 gap-3 mono text-[11px]">
+        <div class="card p-3"><div class="text-mute text-[10px]">avg latency</div><div id="route-lat" class="text-ink text-base">11 ms</div></div>
+        <div class="card p-3"><div class="text-mute text-[10px]">last 5m</div><div id="route-calls" class="text-ink text-base">421</div></div>
+        <div class="card p-3"><div class="text-mute text-[10px]">error rate</div><div id="route-err" class="text-base c-ok">0.0%</div></div>
+        <div class="card p-3"><div class="text-mute text-[10px]">last alert</div><div class="text-ink text-base">— none —</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+  </div><!-- /canvas -->
+</div><!-- /stage -->
+
+<!-- ============================================================== -->
+<script>
+/* ============== STAGE FIT ============== */
+function fit(){
+  const cw=1600, ch=900;
+  const s = Math.min(window.innerWidth / (cw+40), window.innerHeight / (ch+40));
+  document.getElementById('canvas').style.transform = `translate(-50%,-50%) scale(${s})`;
+}
+window.addEventListener('resize', fit); fit();
+
+/* ============== FETCH DASHBOARD DATA ============== */
+async function fetchDashboardData() {
+  try {
+    const response = await fetch('/api/dashboard/stats');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return data;
+  } catch (e) {
+    console.warn('Could not fetch dashboard data:', e);
+    return null;
+  }
+}
+
+async function fetchDashboardEvents() {
+  try {
+    const response = await fetch('/api/dashboard/events?limit=20');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (e) {
+    console.warn('Could not fetch dashboard events:', e);
+    return { events: [] };
+  }
+}
+
+/* ============== STATE ============== */
+const STATE = {
+  vus: 25,
+  authValid: true,
+  paused: false,
+  counters: { ok: 142, e401: 0, trip: 0, total: 1244 },
+};
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+const rand = (a,b) => a + Math.random() * (b-a);
+const irand = (a,b) => Math.floor(rand(a,b+1));
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const nowLabel = () => new Date().toTimeString().slice(0,8);
+
+function derive() {
+  const v = STATE.vus;
+  const stress = clamp((v-25)/275, 0, 1);
+  const p50 = 35 + stress*70 + rand(-4,4);
+  const p95 = 70 + stress*900 + rand(-15,15);
+  const p99 = 110 + stress*1400 + rand(-30,30);
+  let apdex = 0.99 - stress*0.45 + rand(-0.01,0.01);
+  if (!STATE.authValid) apdex -= 0.05;
+  apdex = clamp(apdex, 0.35, 0.99);
+  let err = 0.2 + stress*8 + rand(-0.1,0.3);
+  if (!STATE.authValid) err += 4 + rand(0,2);
+  err = clamp(err, 0.1, 18);
+  const rpm = Math.round(v * 6.2 + rand(-10,10));
+  const db_select = 8 + stress*120 + rand(-2,2);
+  const db_insert = 14 + stress*600 + rand(-5,5);
+  const db_commit = 5 + stress*200 + rand(-2,2);
+  const db_pool   = 2 + stress*40 + rand(-1,1);
+  const lookup_true = 30 + rand(-4,4) + stress*5;
+  return { p50,p95,p99,apdex,err,rpm,db_select,db_insert,db_commit,db_pool,lookup_true,stress };
+}
+
+/* ============== CHARTS (LIGHT) ============== */
+const lightAxis = { style:{ colors:'#64748B', fontFamily:'JetBrains Mono', fontSize:'9px' } };
+const lightGrid = '#E2E8F0';
+
+const latSeries = {
+  p50: Array.from({length:30},()=>40+rand(-3,3)),
+  p95: Array.from({length:30},()=>110+rand(-10,10)),
+  p99: Array.from({length:30},()=>200+rand(-20,20)),
+};
+const latencyChart = new ApexCharts($('#chart-latency'), {
+  chart:{ type:'line', height:122, toolbar:{show:false}, animations:{enabled:true, dynamicAnimation:{speed:400}}, background:'transparent', sparkline:{enabled:false} },
+  colors:['#0284C7','#D97706','#DC2626'],
+  stroke:{ curve:'smooth', width:[2,2,2] },
+  fill:{ type:'gradient', gradient:{ shadeIntensity:1, opacityFrom:0.18, opacityTo:0, stops:[0,90] } },
+  series:[{ name:'p50', data: latSeries.p50 },{ name:'p95', data: latSeries.p95 },{ name:'p99', data: latSeries.p99 }],
+  xaxis:{ labels:{show:false}, axisBorder:{show:false}, axisTicks:{show:false}, categories: Array.from({length:30},(_,i)=>i) },
+  yaxis:{ labels:{ ...lightAxis, formatter:(v)=>Math.round(v)+'ms' } },
+  grid:{ borderColor:lightGrid, strokeDashArray:3, padding:{left:6,right:6,top:0,bottom:0} },
+  legend:{ show:false }, tooltip:{ x:{show:false} }
+});
+latencyChart.render();
+
+const apdexChart = new ApexCharts($('#chart-apdex'), {
+  chart:{ type:'radialBar', height:138, animations:{enabled:true, dynamicAnimation:{speed:400}}, background:'transparent' },
+  series:[94], colors:['#059669'],
+  plotOptions:{ radialBar:{
+    startAngle:-135, endAngle:135,
+    hollow:{ size:'58%' },
+    track:{ background:'#E2E8F0', strokeWidth:'100%' },
+    dataLabels:{
+      name:{ show:true, color:'#64748B', fontSize:'10px', fontFamily:'JetBrains Mono', offsetY:-6, formatter:()=>'apdex' },
+      value:{ show:true, color:'#059669', fontSize:'26px', fontFamily:'JetBrains Mono', fontWeight:700, offsetY:6, formatter:v=>(v/100).toFixed(2) },
+    }
+  }},
+  stroke:{ lineCap:'round' },
+});
+apdexChart.render();
+
+const lookupChart = new ApexCharts($('#chart-lookup'), {
+  chart:{ type:'donut', height:126, background:'transparent', animations:{enabled:true,dynamicAnimation:{speed:300}} },
+  series:[34, 66], labels:['In blacklist','Clean'],
+  colors:['#DC2626','#0284C7'],
+  stroke:{ width:2, colors:['#FFFFFF'] },
+  legend:{ show:false }, dataLabels:{ enabled:false },
+  plotOptions:{ pie:{ donut:{
+    size:'70%',
+    labels:{ show:true,
+      name:{ show:true, color:'#64748B', fontSize:'10px', fontFamily:'JetBrains Mono' },
+      value:{ show:true, color:'#0F172A', fontSize:'16px', fontFamily:'JetBrains Mono', formatter:v=>v+'%' },
+      total:{ show:true, label:'lookups', color:'#64748B', fontSize:'10px', fontFamily:'JetBrains Mono', formatter:()=> '2,134' }
+    }
+  }}}
+});
+lookupChart.render();
+
+const errSeries = Array.from({length:24}, ()=> rand(0.1, 0.7));
+const errChart = new ApexCharts($('#chart-err'), {
+  chart:{ type:'bar', height:118, toolbar:{show:false}, animations:{enabled:true, dynamicAnimation:{speed:300}}, background:'transparent' },
+  series:[{ name:'err %', data: errSeries }],
+  colors:['#DC2626'],
+  plotOptions:{ bar:{ columnWidth:'62%', borderRadius:2 } },
+  dataLabels:{ enabled:false },
+  xaxis:{ labels:{show:false}, axisBorder:{show:false}, axisTicks:{show:false} },
+  yaxis:{ labels:{ ...lightAxis, formatter:v=>v.toFixed(1)+'%' } },
+  grid:{ borderColor:lightGrid, strokeDashArray:3, padding:{left:4,right:4,top:0,bottom:0} },
+  tooltip:{ x:{show:false} }
+});
+errChart.render();
+
+/* ============== EVENT STREAM ============== */
+const STREAM_EL = $('#stream');
+const TLDs = ['gmail.com','outlook.com','yahoo.com','hotmail.com','protonmail.com','uniandes.edu.co'];
+const NAMES = ['alex','sam','j.doe','m.ortiz','luc','pat','b.gonz','admin','support','noreply','test','q.user'];
+function maskedEmail(){ const n=NAMES[irand(0,NAMES.length-1)]; return n[0]+'*'.repeat(Math.max(3,n.length-1))+'@'+TLDs[irand(0,TLDs.length-1)]; }
+function maskedIP(){ return `${irand(10,201)}.${irand(10,250)}.xx.xx`; }
+function uuid(){ return '11111111-' + Math.random().toString(16).slice(2,6) + '-...'; }
+const COLOR = { POST:'#059669', GET:'#0284C7', ERR:'#DC2626', WARN:'#D97706' };
+
+function pushEvent() {
+  const stress = clamp((STATE.vus-25)/275, 0, 1);
+  let kind = 'GET';
+  const r = Math.random();
+  if (r < 0.25) kind = 'POST';
+  else if (r < 0.30 + stress*0.18) kind = 'WARN';
+  if (!STATE.authValid && Math.random() < 0.55) kind = 'ERR';
+  if (STATE.authValid && stress > 0.5 && Math.random() < stress*0.25) kind = 'ERR';
+
+  let body;
+  if (kind === 'POST') { STATE.counters.ok++; STATE.counters.total++; body = `Blocked: ${maskedEmail()} | App: ${uuid()} | IP: ${maskedIP()}`; }
+  else if (kind === 'GET') { STATE.counters.ok++; const hit = Math.random() < 0.34; body = `Lookup: ${maskedEmail()} | In_Blacklist: ${hit?'True ':'False'} | ${hit?'CACHE':'DB  '}`; }
+  else if (kind === 'WARN') { body = `Slow query: SELECT * FROM blacklist WHERE email=$1 | ${Math.round(rand(500,950))} ms`; }
+  else { STATE.counters.e401++; STATE.counters.trip++; body = `401 Unauthorized | invalid Bearer | notice_error("AuthMismatch") | IP: ${maskedIP()}`; }
+
+  const row = document.createElement('div');
+  row.className = 'stream-row flex items-center gap-3';
+  row.innerHTML = `
+    <span class="text-mute w-[58px] shrink-0">${nowLabel()}</span>
+    <span class="shrink-0 inline-flex items-center gap-1 w-[54px]"><span class="dot" style="background:${COLOR[kind]}"></span><span style="color:${COLOR[kind]}">${kind}</span></span>
+    <span class="text-body truncate">${body}</span>`;
+  STREAM_EL.prepend(row);
+  while (STREAM_EL.children.length > 40) STREAM_EL.lastChild.remove();
+}
+for (let i=0;i<12;i++) pushEvent();
+
+/* ============== LOAD INITIAL DATA ============== */
+async function initDashboard() {
+  const dashData = await fetchDashboardData();
+  if (dashData) {
+    STATE.counters.total = dashData.blacklisted.total || STATE.counters.total;
+    STATE.counters.ok = dashData.blacklisted.total - dashData.error_rate.errors_401 - (dashData.error_rate.errors_5xx || 0);
+  }
+  const eventsData = await fetchDashboardEvents();
+  if (eventsData.events && eventsData.events.length > 0) {
+    STREAM_EL.innerHTML = '';
+    eventsData.events.forEach(e => {
+      const row = document.createElement('div');
+      row.className = 'stream-row flex items-center gap-3';
+      const method = e.method.split(' ')[0];
+      const color = method === 'POST' ? '#059669' : '#0284C7';
+      row.innerHTML = `
+        <span class="text-mute w-[58px] shrink-0">${e.timestamp.split('T')[1].slice(0,8)}</span>
+        <span class="shrink-0 inline-flex items-center gap-1 w-[54px]"><span class="dot" style="background:${color}"></span><span style="color:${color}">${method}</span></span>
+        <span class="text-body truncate">${e.email} | ${e.reason} | ${e.app_uuid}</span>`;
+      STREAM_EL.appendChild(row);
+    });
+  }
+}
+initDashboard();
+
+/* ============== LOOP ============== */
+function loop() {
+  const d = derive();
+
+  $('#kpi-total').textContent = STATE.counters.total.toLocaleString();
+  $('#kpi-apdex').textContent = d.apdex.toFixed(2);
+  $('#kpi-err').innerHTML     = d.err.toFixed(1) + '<span class="text-base text-mute">%</span>';
+  $('#kpi-rps').textContent   = d.rpm;
+
+  $('#lat-p50').innerHTML = Math.round(d.p50)+'<span class="text-[11px] text-mute">ms</span>';
+  $('#lat-p95').innerHTML = Math.round(d.p95)+'<span class="text-[11px] text-mute">ms</span>';
+  $('#lat-p99').innerHTML = Math.round(d.p99)+'<span class="text-[11px] text-mute">ms</span>';
+
+  const apdexOk = d.apdex>=0.85, apdexWarn = d.apdex>=0.7 && !apdexOk, apdexBad = d.apdex<0.7;
+  $('#kpi-apdex').className = 'text-3xl font-semibold mono ' + (apdexBad?'c-bad':apdexWarn?'c-warn':'c-ok');
+  $('#apdex-chip').innerHTML = `<span class="dot ${apdexBad?'bg-bad':apdexWarn?'bg-warn':'bg-ok'}"></span>${apdexBad?'frustrated':apdexWarn?'tolerating':'satisfied'}`;
+  $('#gauge-state').innerHTML = $('#apdex-chip').innerHTML;
+
+  const errOk = d.err<2, errWarn=d.err>=2 && d.err<5, errBad=d.err>=5;
+  $('#kpi-err').className = 'text-3xl font-semibold mono ' + (errBad?'c-bad':errWarn?'c-warn':'');
+  $('#err-chip').innerHTML = `<span class="dot ${errBad?'bg-bad pulse':errWarn?'bg-warn':'bg-ok'}"></span>${errBad?'critical':errWarn?'elevated':'nominal'}`;
+  $('#err-alert').innerHTML = $('#err-chip').innerHTML;
+
+  const dbVals = [['select',d.db_select,600],['insert',d.db_insert,800],['commit',d.db_commit,400],['pool',d.db_pool,60]];
+  for (const [k,v,max] of dbVals) {
+    const el=$('#db-'+k), bar=$('#db-'+k+'-bar'); if (!el) continue;
+    el.textContent = Math.round(v)+' ms';
+    bar.style.width = clamp(v/max*100,2,100)+'%';
+    bar.className = 'h-1.5 rounded ' + (v>500?'bg-bad':v>250?'bg-warn':'bg-ok');
+  }
+  const dbCrit = d.db_insert>500 || d.db_select>500;
+  $('#db-chip').innerHTML = `<span class="dot ${dbCrit?'bg-bad pulse':d.db_insert>250?'bg-warn':'bg-ok'}"></span>${dbCrit?'lock contention':d.db_insert>250?'elevated':'nominal'}`;
+
+  const lt = Math.round(d.lookup_true);
+  lookupChart.updateSeries([lt, 100-lt]);
+  $('#lk-true').textContent  = lt+'%';
+  $('#lk-false').textContent = (100-lt)+'%';
+
+  latSeries.p50.shift(); latSeries.p50.push(d.p50);
+  latSeries.p95.shift(); latSeries.p95.push(d.p95);
+  latSeries.p99.shift(); latSeries.p99.push(d.p99);
+  latencyChart.updateSeries([{name:'p50',data:[...latSeries.p50]},{name:'p95',data:[...latSeries.p95]},{name:'p99',data:[...latSeries.p99]}]);
+
+  apdexChart.updateSeries([Math.round(d.apdex*100)]);
+  const apdexColor = apdexBad?'#DC2626':apdexWarn?'#D97706':'#059669';
+  apdexChart.updateOptions({ colors:[apdexColor], plotOptions:{ radialBar:{ dataLabels:{ value:{ color: apdexColor } } } } });
+
+  errSeries.shift(); errSeries.push(d.err);
+  errChart.updateSeries([{name:'err %',data:[...errSeries]}]);
+
+  $('#ctr-200').textContent = STATE.counters.ok;
+  $('#ctr-401').textContent = STATE.counters.e401;
+  $('#cnt-401').textContent = STATE.counters.e401;
+  $('#cnt-5xx').textContent = Math.max(2, Math.round(d.err*0.3));
+  $('#cnt-notice').textContent = STATE.counters.trip + Math.max(0, Math.round(d.err));
+
+  const cpu1 = Math.round(15 + d.stress*70 + rand(-3,3));
+  const cpu2 = Math.round(5 + d.stress*25 + rand(-2,2));
+  $('#task1-cpu').textContent = cpu1+'%';
+  $('#task2-cpu').textContent = cpu2+'%';
+  $('#task1-mem').textContent = Math.round(380 + d.stress*340)+' MB';
+  $('#task2-mem').textContent = Math.round(110 + d.stress*70)+' MB';
+  $('#task2-evt').textContent = Math.round(30 + d.stress*120);
+
+  $('#db-pool-info').textContent = Math.round(6 + d.stress*14)+' / 20 conns';
+
+  const alerts = {
+    apdex:   d.apdex<0.8,
+    error:   d.err>5,
+    db:      (d.db_insert>500 || d.db_select>500),
+    latency: d.p99>1000,
+    auth:    !STATE.authValid || STATE.counters.trip>0,
+  };
+  for (const key of Object.keys(alerts)) {
+    const el = document.querySelector(`[data-alert="${key}"]`);
+    if (!el) continue;
+    const on = alerts[key];
+    const dot = el.querySelector('.dot');
+    const txt = el.querySelector('span:last-child');
+    if (on) {
+      const isWarn = (key==='db' || key==='auth');
+      el.style.background = isWarn ? '#FEF3C7' : '#FEE2E2';
+      el.style.borderColor = isWarn ? '#FDE68A' : '#FECACA';
+      dot.className = 'dot pulse ' + (isWarn ? 'bg-warn' : 'bg-bad');
+      txt.classList.remove('text-mute'); txt.classList.add(isWarn?'c-warn':'c-bad');
+    } else {
+      el.style.background = ''; el.style.borderColor = '';
+      dot.className = 'dot bg-mute';
+      txt.classList.remove('c-warn','c-bad'); txt.classList.add('text-mute');
+    }
+  }
+
+  if (!STATE.paused) {
+    const stress = clamp((STATE.vus-25)/275, 0, 1);
+    const n = 1 + Math.round(stress*3);
+    for (let i=0;i<n;i++) pushEvent();
+  }
+}
+loop(); setInterval(loop, 1500);
+
+/* ============== TABS ============== */
+$$('#tabbar button').forEach(b => b.addEventListener('click', e => {
+  const tab = e.currentTarget.dataset.tab;
+  $$('#tabbar button').forEach(x => x.classList.remove('tab-active'));
+  e.currentTarget.classList.add('tab-active');
+  $$('.pane').forEach(p => p.classList.add('hidden'));
+  $('#pane-'+tab).classList.remove('hidden');
+}));
+
+/* ============== SLIDER ============== */
+const slider=$('#vu-slider'), vuVal=$('#vu-val'), vuScn=$('#vu-scenario');
+function setVU(v) {
+  STATE.vus = v;
+  slider.value = v;
+  vuVal.textContent = v;
+  vuVal.className = 'text-4xl font-semibold mono ' + (v>200?'c-bad':v>150?'c-warn':'c-tele');
+  vuScn.textContent = v<=50? 'cool steady-state' : v<=150 ? 'normal load' : v<=200 ? 'ramping · warning' : 'critical stress';
+  $('#rps-chip').innerHTML = `<span class="dot bg-tele"></span>k6 · ${v} VUs`;
+  loop();
+}
+slider.addEventListener('input', e => setVU(+e.target.value));
+$$('[data-vu]').forEach(b => b.addEventListener('click', e => setVU(+e.currentTarget.dataset.vu)));
+
+/* ============== AUTH ============== */
+function setAuth(valid) {
+  STATE.authValid = valid;
+  const v=$('#auth-valid'), iv=$('#auth-invalid');
+  if (valid) {
+    v.style.background='#D1FAE5'; v.style.color='#047857';
+    iv.style.background=''; iv.style.color='';
+    iv.classList.add('text-mute');
+  } else {
+    v.style.background=''; v.style.color='';
+    v.classList.remove('c-ok');
+    iv.style.background='#FEE2E2'; iv.style.color='#B91C1C';
+  }
+  $('#auth-token').textContent = valid ? ' Bearer uniandes-devops-2026' : ' Bearer eyJhbGciOiJIUzI1NiJ9.invalid_token.x9k2q';
+  if (!valid) { for (let i=0;i<6;i++){ STATE.counters.e401++; STATE.counters.trip++; } }
+  loop();
+}
+$('#auth-valid').addEventListener('click', ()=>setAuth(true));
+$('#auth-invalid').addEventListener('click', ()=>setAuth(false));
+
+/* ============== STREAM PAUSE ============== */
+$('#stream-pause').addEventListener('click', e => {
+  STATE.paused = !STATE.paused;
+  e.currentTarget.innerHTML = STATE.paused ? '▶ resume' : '⏸ pause';
+});
+
+/* ============== ARCH TABS ============== */
+$$('.arch-tab').forEach(t => t.addEventListener('click', e => {
+  const k = e.currentTarget.dataset.arch;
+  $$('.arch-tab').forEach(x => x.classList.remove('tab-active'));
+  e.currentTarget.classList.add('tab-active');
+  $$('.arch-pane').forEach(p => p.classList.add('hidden'));
+  $('#arch-'+k).classList.remove('hidden');
+}));
+
+/* ============== API TERMINAL ============== */
+const ROUTES = {
+  ping: {
+    title:'curl · GET /ping',
+    body:`$ curl -sS https://blacklist.uniandes-devops.io/ping
+
+HTTP/2 200
+content-type: application/json
+x-fargate-task: taller4-blacklist-3f9a
+
+{
+  "status": "ok",
+  "service": "devops-taller-4-flask",
+  "env": "production",
+  "uptime_s": 842
+}`,
+    lat:'11 ms', calls:'421', err:'0.0%', errClass:'c-ok'
+  },
+  post: {
+    title:'curl · POST /blacklists',
+    body:`$ curl -X POST https://blacklist.uniandes-devops.io/blacklists \\
+    -H "Authorization: Bearer uniandes-devops-2026" \\
+    -H "Content-Type: application/json" \\
+    -d '{
+      "email":          "spam@example.com",
+      "app_uuid":       "11111111-2222-3333-4444-555555555555",
+      "blocked_reason": "phishing"
+    }'
+
+HTTP/2 201
+location: /blacklists/spam@example.com
+
+{
+  "email":      "spam@example.com",
+  "request_ip": "186.154.xx.xx",
+  "created_at": "2026-05-23T14:02:17Z"
+}`,
+    lat:'38 ms', calls:'214', err:'0.4%', errClass:''
+  },
+  get: {
+    title:'curl · GET /blacklists/<email>',
+    body:`$ curl https://blacklist.uniandes-devops.io/blacklists/spam@example.com \\
+    -H "Authorization: Bearer uniandes-devops-2026"
+
+HTTP/2 200
+
+{
+  "email":         "spam@example.com",
+  "in_blacklist":  true,
+  "blocked_reason":"phishing",
+  "source":        "cache"
+}`,
+    lat:'14 ms', calls:'1,499', err:'0.1%', errClass:'c-ok'
+  }
+};
+function setRoute(key) {
+  const r = ROUTES[key];
+  $('#term-title').textContent = r.title;
+  $('#term-body').textContent  = r.body;
+  $('#route-lat').textContent   = r.lat;
+  $('#route-calls').textContent = r.calls;
+  const e = $('#route-err'); e.textContent = r.err; e.className = 'text-base ' + (r.errClass||'');
+  $$('.api-row').forEach(x => x.classList.remove('tab-active'));
+  document.querySelector(`.api-row[data-route="${key}"]`).classList.add('tab-active');
+}
+$$('.api-row').forEach(b => b.addEventListener('click', e => setRoute(e.currentTarget.dataset.route)));
+setRoute('ping');
+
+$('#copy-btn').addEventListener('click', e => {
+  navigator.clipboard?.writeText($('#term-body').textContent);
+  e.currentTarget.textContent = 'copied ✓';
+  setTimeout(()=>{ e.currentTarget.textContent='copy'; }, 1200);
+});
+</script>
+</body>
+</html>
