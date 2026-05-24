@@ -106,17 +106,17 @@ def get_or_create_policy(policy_name):
     print(f"Politica no encontrada. Creando nueva politica '{policy_name}'...")
     create_mutation = """
     mutation($accountId: Int!, $name: String!) {
-      alertsCreatePolicy(accountId: $accountId, policy: {name: $name, incidentPreference: PER_POLICY}) {
+      alertsPolicyCreate(accountId: $accountId, policy: {name: $name, incidentPreference: PER_POLICY}) {
         id
         name
       }
     }
     """
     res = run_query(create_mutation, {"accountId": ACCOUNT_ID, "name": policy_name})
-    if res and res.get("alertsCreatePolicy"):
-        policy_id = int(res["alertsCreatePolicy"]["id"])
-        print(f"Politica creada exitosamente. ID: {policy_id}")
-        return policy_id
+    if res and res.get("alertsPolicyCreate"):
+      policy_id = int(res["alertsPolicyCreate"]["id"])
+      print(f"Politica creada exitosamente. ID: {policy_id}")
+      return policy_id
     
     print("Error al crear la politica.")
     sys.exit(1)
