@@ -15,7 +15,7 @@ from flask_restful import Resource
 
 from src.main import db
 from src.models.blacklist import Blacklist
-from src.observability import add_custom_attribute
+from src.observability import add_custom_attribute, record_custom_event, notice_error
 
 
 def _is_authorized():
@@ -106,6 +106,15 @@ class BlacklistResource(Resource):
 
     def post(self):
         if not _is_authorized():
+            auth_val = request.headers.get("Authorization", "")
+            notice_error(
+                Exception("Unauthorized Blacklist POST Attempt"),
+                attributes={
+                    "client_ip": request.remote_addr,
+                    "auth_header_snippet": auth_val[:15] + "..." if auth_val else "None",
+                    "request_url": request.url
+                }
+            )
             return {"msg": "Unauthorized"}, 401
 
         args = _payload()
@@ -144,6 +153,19 @@ class BlacklistResource(Resource):
         db.session.add(entry)
         db.session.commit()
 
+        # Enviar evento personalizado a New Relic para analiticas avanzadas
+        record_custom_event(
+            "BlacklistEvent",
+            {
+                "action": "blacklist_addition",
+                "email_domain": email_domain,
+                "app_uuid": entry.app_uuid,
+                "request_ip": entry.request_ip,
+                "blocked_reason": entry.blocked_reason or "none",
+                "created_at": entry.created_at.isoformat() + "Z"
+            }
+        )
+
         return {
             "msg": "Email agregado a la lista negra global",
             "id": entry.id,
@@ -178,6 +200,16 @@ class BlacklistByEmailResource(Resource):
 
     def get(self, email):
         if not _is_authorized():
+            auth_val = request.headers.get("Authorization", "")
+            notice_error(
+                Exception("Unauthorized Blacklist GET Attempt"),
+                attributes={
+                    "client_ip": request.remote_addr,
+                    "auth_header_snippet": auth_val[:15] + "..." if auth_val else "None",
+                    "request_url": request.url,
+                    "queried_email": email
+                }
+            )
             return {"msg": "Unauthorized"}, 401
 
         # Registro el dominio consultado.
@@ -191,7 +223,26 @@ class BlacklistByEmailResource(Resource):
         )
 
         if entry is None:
+            record_custom_event(
+                "BlacklistEvent",
+                {
+                    "action": "blacklist_lookup",
+                    "email_domain": email_domain,
+                    "in_blacklist": False,
+                    "blocked_reason": "none"
+                }
+            )
             return {"in_blacklist": False, "blocked_reason": None}, 200
+
+        record_custom_event(
+            "BlacklistEvent",
+            {
+                "action": "blacklist_lookup",
+                "email_domain": email_domain,
+                "in_blacklist": True,
+                "blocked_reason": entry.blocked_reason or "none"
+            }
+        )
 
         return {
             "in_blacklist": True,

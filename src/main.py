@@ -15,7 +15,11 @@ from flask_jwt_extended import JWTManager
 from flask_restful import Api
 from flasgger import Flasgger
 
-from src.observability import new_relic_status, record_request_context
+from src.observability import (
+    new_relic_status,
+    record_request_context,
+    record_response_context,
+)
 
 # Cargar variables de entorno
 env_file = os.environ.get("ENV_FILE", ".env.local")
@@ -54,6 +58,7 @@ def create_app(test_config=None):
 
     # Agrego contexto basico a New Relic.
     app.before_request(record_request_context)
+    app.after_request(record_response_context)
 
     db.init_app(app)
     jwt.init_app(app)
